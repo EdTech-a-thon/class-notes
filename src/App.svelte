@@ -33,7 +33,7 @@
   let session: Session = 'checking'
   let connection: DriveConnection | null = null
   let gradebook: Gradebook | null = null
-  let pendingGradebook: Gradebook | null = null // validated at pick time, revealed by "Start grading"
+  let autoOpening = false // a returning teacher goes straight to the roster, no step list
   let spreadsheet: RememberedSpreadsheet | null = null
   let templateCopied = false
   let selectedStudent: Student | null = null
@@ -47,6 +47,7 @@
   onMount(() => {
     spreadsheet = getRememberedSpreadsheet()
     templateCopied = hasCopiedTemplate()
+    autoOpening = !!spreadsheet
     const arrival = consumeArrivalError()
     if (arrival === 'access_denied') notice = describeArrivalError(arrival)
     else if (arrival) error = describeArrivalError(arrival)
@@ -86,6 +87,9 @@
       session = 'signed_out'
       showError(caught)
     }
+    // Every step already done: skip the list entirely and open the roster.
+    if (session === 'ready' && spreadsheet) await openGradebook(spreadsheet.id)
+    autoOpening = false
   }
 
   // Broker failures change what the setup screen should offer; Google 401s mean the token is dead.
@@ -97,7 +101,6 @@
       if (caught.signedOut || caught.needsConnection) {
         clearAuthorization()
         gradebook = null
-        pendingGradebook = null
       }
     } else if (isAuthorizationError(caught)) {
       clearAuthorization()
@@ -137,7 +140,6 @@
     } finally {
       clearAuthorization()
       gradebook = null
-      pendingGradebook = null
       selectedStudent = null
       connection = null
       session = 'signed_out'
@@ -151,7 +153,6 @@
     try {
       const token = await authorize()
       gradebook = await loadGradebook(id, token)
-      notice = 'Ready for ' + gradebook.dayLabel + '.'
     } catch (caught) {
       handleFailure(caught)
     } finally {
@@ -170,12 +171,13 @@
     try {
       const picked = await pickSpreadsheet()
       if (!picked) return
-      // Check the tabs now so a wrong file is caught on this step, not the next one.
+      // Check the tabs now so a wrong file is caught on this step, then go straight to grading.
       const token = await authorize()
-      pendingGradebook = await loadGradebook(picked.id, token)
-      spreadsheet = { id: picked.id, name: pendingGradebook.title || picked.name }
+      const loaded = await loadGradebook(picked.id, token)
+      spreadsheet = { id: picked.id, name: loaded.title || picked.name }
       rememberSpreadsheet(spreadsheet)
       templateCopied = true
+      gradebook = loaded
     } catch (caught) {
       handleFailure(caught)
     } finally {
@@ -183,16 +185,9 @@
     }
   }
 
-  async function startGrading() {
-    if (!spreadsheet) return
-    if (pendingGradebook) {
-      resetMessages()
-      gradebook = pendingGradebook
-      pendingGradebook = null
-      notice = 'Ready for ' + gradebook.dayLabel + '.'
-      return
-    }
-    await openGradebook(spreadsheet.id)
+  // Only reached when an automatic open failed (network, revoked file); acts as the retry.
+  function startGrading() {
+    if (spreadsheet) return openGradebook(spreadsheet.id)
   }
 
   function editStudent(student: Student) {
@@ -235,7 +230,6 @@
   function switchSpreadsheet() {
     forgetSpreadsheet()
     spreadsheet = null
-    pendingGradebook = null
     gradebook = null
     selectedStudent = null
     resetMessages()
@@ -330,6 +324,10 @@
           <a class="button primary" href={sheetUrl(gradebook.id)} target="_blank" rel="noreferrer">Open class roster</a>
         </section>
       {/if}
+    </main>
+  {:else if autoOpening}
+    <main class="setup-view opening-view" aria-busy="true">
+      <p class="opening-note">Opening your grade book…</p>
     </main>
   {:else}
     <main class="setup-view">
@@ -451,7 +449,7 @@
             <span>Today’s roster, one tap per student, saved straight to your sheet.</span>
           </div>
           <button class="button primary step-action" onclick={startGrading} disabled={loading || stepState(5) !== 'current'}>
-            {loading && currentStep === 5 ? 'Loading…' : 'Start grading'}
+            {loading && currentStep === 5 ? 'Opening…' : 'Start grading'}
           </button>
         </li>
       </ol>

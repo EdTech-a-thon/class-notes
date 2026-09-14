@@ -536,3 +536,6 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
   .step-mark { width: 30px; height: 30px; font-size: 0.85rem; }
   .step-action { grid-column: 2; justify-self: start; min-width: 0; }
 }
+
+.opening-view { display: flex; align-items: center; justify-content: center; min-height: 40vh; }
+.opening-note { color: var(--muted); font-size: 1rem; font-weight: 600; }
