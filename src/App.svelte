@@ -1,5 +1,17 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
+  import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right'
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right'
+  import Check from '@lucide/svelte/icons/check'
+  import ChevronDown from '@lucide/svelte/icons/chevron-down'
+  import CopyPlus from '@lucide/svelte/icons/copy-plus'
+  import FolderOpen from '@lucide/svelte/icons/folder-open'
+  import LogOut from '@lucide/svelte/icons/log-out'
+  import Maximize from '@lucide/svelte/icons/maximize'
+  import Minimize from '@lucide/svelte/icons/minimize'
+  import Pencil from '@lucide/svelte/icons/pencil'
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw'
+  import X from '@lucide/svelte/icons/x'
   import {
     BrokerError,
     connectDrive,
@@ -18,14 +30,14 @@
     templateCopyUrl,
   } from './lib/google'
   import {
-    forgetSpreadsheet,
+    getRecentSpreadsheets,
     getRememberedSpreadsheet,
     hasCopiedTemplate,
     markTemplateCopied,
     rememberSpreadsheet,
     type RememberedSpreadsheet,
   } from './lib/setup'
-  import { isAuthorizationError, loadGradebook, totalFor, updateGrade } from './lib/sheets'
+  import { isAuthorizationError, loadGradebook, renameSpreadsheet, totalFor, updateGrade } from './lib/sheets'
   import { DIMENSIONS, type DimensionKey, type Gradebook, type Grades, type Student } from './lib/types'
 
   type Session = 'checking' | 'signed_out' | 'not_connected' | 'invalid' | 'ready'
@@ -36,6 +48,16 @@
   let autoOpening = false // a returning teacher goes straight to the roster, no step list
   let pendingGradebook: Gradebook | null = null // loaded at pick time on the first run, shown by step 5
   let spreadsheet: RememberedSpreadsheet | null = null
+  let recent: RememberedSpreadsheet[] = [] // grade books opened on this device, for the switcher menu
+  let switcherOpen = false
+  let switcher: HTMLElement | undefined
+  let fullscreen = false
+  let renaming = false
+  let draftTitle = ''
+  let titleInput: HTMLInputElement | undefined
+  // iPadOS Safari before 16.4 only has the webkit-prefixed API; iPhones have none, so the button hides.
+  const fullscreenSupported =
+    typeof document !== 'undefined' && !!(document.fullscreenEnabled || (document as any).webkitFullscreenEnabled)
   let templateCopied = false
   let selectedStudent: Student | null = null
   let draftGrades: Grades | null = null
@@ -55,7 +77,25 @@
     if (arrival === 'access_denied') notice = describeArrivalError(arrival)
     else if (arrival) error = describeArrivalError(arrival)
     void refreshSession()
+    syncFullscreen()
+    document.addEventListener('webkitfullscreenchange', syncFullscreen)
+    return () => document.removeEventListener('webkitfullscreenchange', syncFullscreen)
   })
+
+  function syncFullscreen() {
+    fullscreen = !!(document.fullscreenElement || (document as any).webkitFullscreenElement)
+  }
+
+  async function toggleFullscreen() {
+    const root = document.documentElement as any
+    try {
+      if (fullscreen) await (document.exitFullscreen?.() ?? (document as any).webkitExitFullscreen?.())
+      else await (root.requestFullscreen?.() ?? root.webkitRequestFullscreen?.())
+    } catch {
+      // The browser refused (no user gesture, embedded, etc.); the button just stays as it is.
+    }
+    syncFullscreen()
+  }
 
   $: classPoints = gradebook?.students.reduce((sum, student) => sum + totalFor(student.grades), 0) ?? 0
   $: possiblePoints = (gradebook?.students.length ?? 0) * DIMENSIONS.length
@@ -158,6 +198,12 @@
     try {
       const token = await authorize()
       gradebook = await loadGradebook(id, token)
+      // The title is the Drive file name, so a rename in Google Sheets shows up here on the next
+      // load; keep the switcher's recent list in step with it.
+      if (gradebook.title && gradebook.title !== spreadsheet?.name) {
+        spreadsheet = { id, name: gradebook.title }
+        rememberSpreadsheet(spreadsheet)
+      }
     } catch (caught) {
       handleFailure(caught)
     } finally {
@@ -200,6 +246,38 @@
     }
     // No preloaded roster means an automatic open failed earlier; this is the retry.
     return openGradebook(spreadsheet.id)
+  }
+
+  async function startRename() {
+    if (!gradebook) return
+    draftTitle = gradebook.title
+    renaming = true
+    await tick()
+    titleInput?.select()
+  }
+
+  function cancelRename() {
+    renaming = false
+  }
+
+  async function saveRename() {
+    if (!gradebook || saving) return
+    const next = draftTitle.trim()
+    if (!next || next === gradebook.title) return cancelRename()
+    saving = true
+    resetMessages()
+    try {
+      const token = await authorize()
+      const title = await renameSpreadsheet(gradebook.id, next, token)
+      gradebook = { ...gradebook, title }
+      spreadsheet = { id: gradebook.id, name: title }
+      rememberSpreadsheet(spreadsheet)
+      renaming = false
+    } catch (caught) {
+      handleFailure(caught)
+    } finally {
+      saving = false
+    }
   }
 
   function flashSaved(name: string) {
@@ -245,19 +323,60 @@
     }
   }
 
-  function switchSpreadsheet() {
-    forgetSpreadsheet()
-    spreadsheet = null
-    pendingGradebook = null
-    gradebook = null
-    selectedStudent = null
+  function toggleSwitcher() {
+    if (!switcherOpen) recent = getRecentSpreadsheets()
+    switcherOpen = !switcherOpen
+  }
+
+  function closeSwitcherOnOutsideClick(event: PointerEvent) {
+    if (switcherOpen && switcher && !switcher.contains(event.target as Node)) switcherOpen = false
+  }
+
+  function closeSwitcherOnEscape(event: KeyboardEvent) {
+    if (event.key === 'Escape' && switcherOpen) switcherOpen = false
+  }
+
+  // Switching classes never goes back through onboarding. The current roster stays on screen until
+  // the new one has loaded, so a cancelled picker or a wrong file changes nothing.
+  async function switchTo(id: string, name: string) {
+    switcherOpen = false
+    if (id === gradebook?.id) return
     resetMessages()
+    loading = true
+    try {
+      const token = await authorize()
+      const next = await loadGradebook(id, token)
+      spreadsheet = { id, name: next.title || name }
+      rememberSpreadsheet(spreadsheet)
+      gradebook = next
+    } catch (caught) {
+      handleFailure(caught)
+    } finally {
+      loading = false
+    }
+  }
+
+  async function switchViaPicker() {
+    switcherOpen = false
+    resetMessages()
+    loading = true
+    try {
+      const picked = await pickSpreadsheet()
+      if (picked) await switchTo(picked.id, picked.name)
+    } catch (caught) {
+      handleFailure(caught)
+    } finally {
+      loading = false
+    }
   }
 
   function sheetUrl(id: string) {
     return 'https://docs.google.com/spreadsheets/d/' + encodeURIComponent(id) + '/edit'
   }
 </script>
+
+<svelte:window onpointerdown={closeSwitcherOnOutsideClick} onkeydown={closeSwitcherOnEscape} />
+<svelte:document onfullscreenchange={syncFullscreen} />
 
 <svelte:head>
   <title>Participation Grade Book</title>
@@ -275,12 +394,88 @@
 
     {#if gradebook}
       <nav class="topbar-actions" aria-label="Grade book actions">
-        <a href={sheetUrl(gradebook.id)} target="_blank" rel="noreferrer">Open sheet</a>
-        <button class="text-button" onclick={() => openGradebook(gradebook!.id)} disabled={loading}>
-          {loading ? 'Refreshing…' : 'Refresh'}
+        <a class="nav-button" href={sheetUrl(gradebook.id)} target="_blank" rel="noreferrer" title="Open sheet in Google Sheets">
+          <span>Open sheet</span><ArrowUpRight size={18} aria-hidden="true" />
+        </a>
+        <button
+          class="nav-button icon-only"
+          onclick={() => openGradebook(gradebook!.id)}
+          disabled={loading}
+          aria-label={loading ? 'Refreshing' : 'Refresh'}
+          title="Refresh"
+        >
+          <RefreshCw size={20} class={loading ? 'spin' : ''} aria-hidden="true" />
         </button>
-        <button class="text-button" onclick={switchSpreadsheet}>Switch grade book</button>
-        <button class="text-button" onclick={endSession} disabled={loading}>Sign out</button>
+        <div class="switcher" bind:this={switcher}>
+          <button
+            class="nav-button"
+            onclick={toggleSwitcher}
+            disabled={loading}
+            title="Switch grade book"
+            aria-haspopup="menu"
+            aria-expanded={switcherOpen}
+          >
+            <ArrowLeftRight size={18} aria-hidden="true" /><span>Switch grade book</span>
+            <ChevronDown size={16} class="switcher-caret" aria-hidden="true" />
+          </button>
+          {#if switcherOpen}
+            <div class="menu" role="menu" aria-label="Switch grade book">
+              {#if recent.length}
+                <p class="menu-label" aria-hidden="true">Recent</p>
+                {#each recent as sheet (sheet.id)}
+                  <button
+                    class="menu-item"
+                    role="menuitemradio"
+                    aria-checked={sheet.id === gradebook.id}
+                    onclick={() => switchTo(sheet.id, sheet.name)}
+                  >
+                    <span class="menu-check" aria-hidden="true"><Check size={18} strokeWidth={2.5} /></span>
+                    <span class="menu-text">{sheet.name || 'Untitled grade book'}</span>
+                  </button>
+                {/each}
+                <hr class="menu-divider" />
+              {/if}
+              <button class="menu-item" role="menuitem" onclick={switchViaPicker}>
+                <span class="menu-icon" aria-hidden="true"><FolderOpen size={18} /></span>
+                <span class="menu-text">Choose another sheet…</span>
+              </button>
+              <a
+                class="menu-item"
+                class:disabled={missingTemplateConfig}
+                role="menuitem"
+                href={templateCopyUrl()}
+                target="_blank"
+                rel="noreferrer"
+                aria-disabled={missingTemplateConfig}
+                onclick={(event) => {
+                  if (missingTemplateConfig) return event.preventDefault()
+                  switcherOpen = false
+                }}
+              >
+                <span class="menu-icon" aria-hidden="true"><CopyPlus size={18} /></span>
+                <span class="menu-text">
+                  New class from the template
+                  <small>Make a copy in Google Sheets, then choose it here.</small>
+                </span>
+                <ArrowUpRight size={16} aria-hidden="true" />
+              </a>
+            </div>
+          {/if}
+        </div>
+        {#if fullscreenSupported}
+          <button
+            class="nav-button icon-only"
+            onclick={toggleFullscreen}
+            aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
+            aria-pressed={fullscreen}
+            title={fullscreen ? 'Exit full screen' : 'Full screen'}
+          >
+            {#if fullscreen}<Minimize size={20} aria-hidden="true" />{:else}<Maximize size={20} aria-hidden="true" />{/if}
+          </button>
+        {/if}
+        <button class="nav-button" onclick={endSession} disabled={loading} title="Sign out">
+          <LogOut size={18} aria-hidden="true" /><span>Sign out</span>
+        </button>
       </nav>
     {:else if connection?.googleEmail}
       <nav class="topbar-actions" aria-label="Account">
@@ -295,9 +490,34 @@
   {#if gradebook}
     <main class="gradebook-view">
       <section class="page-heading" aria-labelledby="roster-heading">
-        <div>
-          <p class="eyebrow">{gradebook.title}</p>
-          <h1 id="roster-heading">Today’s participation</h1>
+        <div class="heading-text">
+          {#if renaming}
+            <!-- The title is the Drive file name, so saving here renames the file in Google Drive. -->
+            <form class="rename-form" onsubmit={(event) => { event.preventDefault(); void saveRename() }}>
+              <input
+                bind:this={titleInput}
+                bind:value={draftTitle}
+                class="rename-input"
+                type="text"
+                aria-label="Grade book name"
+                maxlength="200"
+                required
+                disabled={saving}
+                onkeydown={(event) => event.key === 'Escape' && cancelRename()}
+              />
+              <button class="button primary rename-save" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+              <button class="button secondary rename-cancel" type="button" onclick={cancelRename} disabled={saving} aria-label="Cancel rename">
+                <X size={20} aria-hidden="true" />
+              </button>
+            </form>
+          {:else}
+            <div class="heading-title">
+              <h1 id="roster-heading">{gradebook.title}</h1>
+              <button class="rename-link" type="button" onclick={startRename} disabled={loading} title="Rename grade book">
+                <Pencil size={16} aria-hidden="true" /><span>Rename</span>
+              </button>
+            </div>
+          {/if}
           <p class="subtext">{gradebook.dayLabel} · {gradebook.students.length} students</p>
         </div>
         <div class="class-total" aria-label={classPoints + ' out of ' + possiblePoints + ' class points'}>
@@ -449,7 +669,7 @@
             <span>
               {#if spreadsheet}
                 {spreadsheet.name || 'Your grade book'}
-                <button type="button" class="link-button" onclick={switchSpreadsheet} disabled={loading}>Change</button>
+                <button type="button" class="link-button" onclick={chooseSpreadsheet} disabled={loading}>Change</button>
               {:else}
                 We’ll check the copy has the right tabs.
               {/if}
@@ -486,7 +706,7 @@
 >
   {#if selectedStudent && draftGrades}
     <form method="dialog">
-      <button class="modal-close" value="cancel" aria-label="Close grade editor">×</button>
+      <button class="modal-close" value="cancel" aria-label="Close grade editor"><X size={22} aria-hidden="true" /></button>
 
       <header class="modal-heading">
         <div class="initials modal-initials">{selectedStudent.initials}</div>
@@ -500,23 +720,25 @@
       </header>
 
       <fieldset class="dimensions">
-        <legend>Participation habits</legend>
-        {#each DIMENSIONS as dimension}
-          <button
-            type="button"
-            class:checked={draftGrades[dimension.key]}
-            class="dimension-row"
-            onclick={() => toggleDimension(dimension.key)}
-            aria-pressed={draftGrades[dimension.key]}
-          >
-            <span class="dimension-emoji">{dimension.emoji}</span>
-            <span class="dimension-copy">
-              <strong>{dimension.label}</strong>
-              <small>{dimension.description}</small>
-            </span>
-            <span class="toggle"><span></span></span>
-          </button>
-        {/each}
+        <legend>Tap each habit that applied today</legend>
+        <div class="dimension-tiles">
+          {#each DIMENSIONS as dimension}
+            <button
+              type="button"
+              class:checked={draftGrades[dimension.key]}
+              class="dimension-tile"
+              onclick={() => toggleDimension(dimension.key)}
+              aria-pressed={draftGrades[dimension.key]}
+            >
+              <span class="tile-check" aria-hidden="true"><Check size={16} strokeWidth={3} /></span>
+              <span class="dimension-emoji">{dimension.emoji}</span>
+              <span class="dimension-copy">
+                <strong>{dimension.label}</strong>
+                <small>{dimension.description}</small>
+              </span>
+            </button>
+          {/each}
+        </div>
       </fieldset>
 
       {#if error}<p class="modal-error" role="alert">{error}</p>{/if}

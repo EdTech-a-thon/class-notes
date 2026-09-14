@@ -96,10 +96,10 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 8px;
 }
 
-.topbar-actions a, .text-button {
+.text-button {
   padding: 7px 0;
   border: 0;
   color: #59657d;
@@ -110,7 +110,108 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
   cursor: pointer;
 }
 
-.topbar-actions a:hover, .text-button:hover { color: var(--blue); }
+.text-button:hover { color: var(--blue); }
+
+/* Nav actions are finger-sized pills: 44px tall, icon plus label on tablets, icon only on phones. */
+.nav-button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: #46516a;
+  background: transparent;
+  font-size: 0.88rem;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.nav-button:hover { color: var(--blue); background: var(--blue-soft); }
+.nav-button:not(:disabled):active { background: #e2e6ff; }
+.nav-button.icon-only { width: 44px; padding: 0; justify-content: center; }
+.nav-button svg { flex: 0 0 auto; }
+.nav-button .spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Grade book switcher: recent sheets first, then the two ways to add one. Rows are 48px so a
+   teacher can pick a class with a thumb. */
+.switcher { position: relative; }
+.switcher-caret { margin: 0 -4px 0 -2px; color: #8b94a8; }
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: min(340px, calc(100vw - 24px));
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 18px 48px rgba(29, 40, 68, 0.18);
+  animation: menu-in 0.14s ease-out;
+}
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.menu-label {
+  margin: 4px 12px 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.menu-divider { margin: 8px 4px; border: 0; border-top: 1px solid var(--line); }
+.menu-item {
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--ink);
+  background: transparent;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.menu-item:hover { background: #f3f5f9; }
+.menu-item[aria-checked="true"] { color: #2f7a5c; }
+.menu-item.disabled { pointer-events: none; }
+.menu-check, .menu-icon {
+  width: 22px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  justify-content: center;
+  color: #8b94a8;
+}
+.menu-check { color: var(--green); visibility: hidden; }
+.menu-item[aria-checked="true"] .menu-check { visibility: visible; }
+.menu-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-text small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: normal;
+  display: block;
+}
 
 .setup-view {
   width: min(900px, calc(100% - 32px));
@@ -125,13 +226,12 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 }
 
 .setup-intro h1, .page-heading h1 {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   color: var(--ink);
-  font-size: clamp(2.1rem, 6vw, 3.4rem);
-  line-height: 1.05;
-  letter-spacing: -0.05em;
+  font-size: clamp(1.5rem, 3.5vw, 2rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
 }
-.setup-intro h1 { margin-bottom: 6px; font-size: clamp(1.5rem, 3.5vw, 2rem); letter-spacing: -0.03em; }
 
 .setup-intro p {
   margin-bottom: 0;
@@ -219,33 +319,86 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 .gradebook-view {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 48px 0 56px;
+  padding: 22px 0 56px;
 }
 
+/* The roster header is one row: class + date on the left, class total on the right. The student
+   cards are the point of the screen, so the header stays short enough to keep them above the fold. */
 .page-heading {
-  margin-bottom: 28px;
+  margin-bottom: 18px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
 }
 
-.page-heading h1 { margin-bottom: 9px; font-size: clamp(2.1rem, 5vw, 3.5rem); }
+.heading-text { min-width: 0; }
+.heading-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.page-heading h1 {
+  margin: 0 0 3px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The grade book is named in Google Drive, so "Rename" is a link into the sheet, not a text field. */
+.rename-link {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #59657d;
+  background: var(--paper);
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rename-link:hover { color: var(--blue); border-color: #c9d1e2; background: var(--blue-soft); }
+
+.rename-form { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; min-width: 0; }
+.rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: min(480px, 100%);
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid var(--blue);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: clamp(1.2rem, 2.6vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.rename-input:focus { outline: 3px solid rgba(91, 111, 232, 0.28); outline-offset: 2px; }
+.rename-save { flex: 0 0 auto; min-width: 88px; }
+.rename-cancel { flex: 0 0 auto; width: 48px; padding: 0; }
 .subtext { margin-bottom: 0; color: var(--muted); font-size: 0.94rem; }
 
 .class-total {
-  min-width: 156px;
-  padding: 15px 17px;
+  padding: 10px 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--paper);
   box-shadow: 0 7px 20px rgba(57, 74, 112, 0.06);
-  text-align: right;
+  white-space: nowrap;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 
-.class-total strong { color: var(--ink); font-size: 1.65rem; letter-spacing: -0.05em; }
+.class-total strong { color: var(--ink); font-size: 1.5rem; letter-spacing: -0.05em; }
 .class-total span { color: #929aad; font-size: 0.95rem; font-weight: 650; }
-.class-total small { margin-top: 1px; color: var(--muted); font-size: 0.72rem; display: block; }
+.class-total small { margin-left: 6px; color: var(--muted); font-size: 0.78rem; font-weight: 600; }
 
 .student-grid {
   display: grid;
@@ -255,10 +408,10 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 
 .student-card {
   min-width: 0;
-  min-height: 82px;
-  padding: 14px;
+  min-height: 116px;
+  padding: 18px 20px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 18px;
   color: var(--ink);
   background: var(--paper);
   box-shadow: 0 4px 14px rgba(57, 74, 112, 0.035);
@@ -267,9 +420,10 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
+.student-card:active { transform: scale(0.985); }
 
 .student-card:hover {
   border-color: #c9d1e2;
@@ -278,12 +432,12 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 }
 
 .initials {
-  width: 46px;
-  height: 46px;
-  border-radius: 13px;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
   color: #45516a;
   background: var(--sky-soft);
-  font-size: 0.76rem;
+  font-size: 0.98rem;
   font-weight: 800;
   display: grid;
   place-items: center;
@@ -296,9 +450,9 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 
 .student-details { min-width: 0; }
 .student-name {
-  margin-bottom: 7px;
+  margin-bottom: 9px;
   color: var(--ink);
-  font-size: 0.9rem;
+  font-size: 1.08rem;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -306,13 +460,13 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
   display: block;
 }
 
-.bubbles { display: flex; gap: 4px; }
+.bubbles { display: flex; gap: 5px; }
 .bubbles > span {
-  width: 23px;
-  height: 23px;
-  border-radius: 7px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background: #eef1f5;
-  font-size: 0.76rem;
+  font-size: 0.95rem;
   filter: grayscale(1);
   opacity: 0.5;
   display: grid;
@@ -320,10 +474,10 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 }
 .bubbles > span.on { background: var(--green-soft); filter: none; opacity: 1; }
 
-.score { color: #7e879b; font-size: 1rem; font-weight: 800; }
+.score { color: #7e879b; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
 .score.perfect { color: var(--green); }
-.score small { font-size: 0.67rem; font-weight: 700; }
-.chevron { color: #adb5c5; font-size: 1.3rem; }
+.score small { font-size: 0.8rem; font-weight: 700; }
+.chevron { color: #adb5c5; font-size: 1.5rem; }
 
 .empty-state {
   padding: 58px 24px;
@@ -345,7 +499,7 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 .empty-state p { margin-bottom: 22px; color: var(--muted); }
 
 .grade-modal {
-  width: min(520px, calc(100% - 24px));
+  width: min(960px, calc(100% - 24px));
   max-height: calc(100vh - 24px);
   padding: 0;
   border: 0;
@@ -357,117 +511,155 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 }
 
 .grade-modal::backdrop { background: rgba(34, 43, 64, 0.48); }
-.grade-modal form { padding: 24px; }
+.grade-modal form { padding: 28px; }
 
 .modal-close {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: 16px;
+  right: 16px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   color: #758096;
   background: #f1f3f7;
-  font-size: 1.35rem;
-  line-height: 1;
   cursor: pointer;
+  display: grid;
+  place-items: center;
 }
+.modal-close:hover { color: var(--ink); background: #e6e9f0; }
 
 .modal-heading {
-  padding-right: 42px;
+  padding-right: 52px;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 13px;
 }
-.modal-heading h2 { margin-bottom: 0; font-size: 1.22rem; letter-spacing: -0.03em; }
-.modal-initials { color: #4557c6; background: var(--blue-soft); }
+.modal-heading h2 { margin-bottom: 0; font-size: 1.4rem; letter-spacing: -0.03em; }
+.modal-initials { width: 52px; height: 52px; border-radius: 14px; font-size: 0.86rem; color: #4557c6; background: var(--blue-soft); }
 .modal-score { text-align: right; }
-.modal-score strong { color: var(--ink); font-size: 1.7rem; letter-spacing: -0.05em; }
+.modal-score strong { color: var(--ink); font-size: 2rem; letter-spacing: -0.05em; }
 .modal-score span { color: #9098aa; font-size: 0.8rem; font-weight: 700; }
 
+/* The five habits sit side by side as big tap-to-toggle tiles. The whole tile is the target, so
+   there is nothing small to aim for on a tablet. */
 .dimensions {
-  margin: 22px 0 0;
+  margin: 24px 0 0;
   padding: 0;
   border: 0;
-  display: grid;
-  gap: 8px;
+  min-width: 0;
 }
-.dimensions legend { margin-bottom: 5px; color: var(--muted); font-size: 0.8rem; font-weight: 750; }
+.dimensions legend { margin-bottom: 10px; color: var(--muted); font-size: 0.84rem; font-weight: 750; }
+.dimension-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
 
-.dimension-row {
-  width: 100%;
-  min-height: 62px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+.dimension-tile {
+  position: relative;
+  min-width: 0;
+  min-height: 176px;
+  padding: 22px 12px 18px;
+  border: 2px solid var(--line);
+  border-radius: 16px;
   color: var(--ink);
   background: var(--paper);
-  text-align: left;
+  text-align: center;
   cursor: pointer;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   gap: 12px;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
 }
-.dimension-row:hover { border-color: #cbd3e3; }
-.dimension-row.checked { border-color: #b9dfd0; background: #f4fbf8; }
-.dimension-emoji {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: #f2f4f8;
-  font-size: 1.05rem;
+.dimension-tile:hover { border-color: #cbd3e3; }
+.dimension-tile:active { transform: scale(0.97); }
+.dimension-tile.checked { border-color: var(--green); background: #f1faf6; }
+
+.tile-check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #d5dbe6;
+  border-radius: 50%;
+  color: white;
+  background: var(--paper);
   display: grid;
   place-items: center;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.tile-check svg { opacity: 0; transition: opacity 150ms ease; }
+.checked .tile-check { border-color: var(--green); background: var(--green); }
+.checked .tile-check svg { opacity: 1; }
+
+.dimension-emoji {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: #f2f4f8;
+  font-size: 1.75rem;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
 }
 .checked .dimension-emoji { background: var(--green-soft); }
-.dimension-copy strong { margin-bottom: 2px; font-size: 0.9rem; display: block; }
-.dimension-copy small { color: var(--muted); font-size: 0.76rem; }
-
-.toggle {
-  width: 39px;
-  height: 23px;
-  padding: 3px;
-  border-radius: 99px;
-  background: #dce1e9;
-  transition: background 150ms ease;
-}
-.toggle span {
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: white;
-  box-shadow: 0 1px 3px rgba(35, 46, 70, 0.2);
-  display: block;
-  transition: transform 150ms ease;
-}
-.checked .toggle { background: var(--green); }
-.checked .toggle span { transform: translateX(16px); }
+.dimension-copy { min-width: 0; }
+.dimension-copy strong { margin-bottom: 4px; font-size: 0.98rem; font-weight: 750; display: block; }
+.dimension-copy small { color: var(--muted); font-size: 0.78rem; line-height: 1.4; display: block; }
 
 .modal-error { margin: 14px 0 0; color: var(--danger); font-size: 0.84rem; }
-.modal-actions { margin-top: 20px; display: grid; grid-template-columns: 1fr 1.25fr; gap: 10px; }
+.modal-actions { margin-top: 24px; display: grid; grid-template-columns: 1fr 1.6fr; gap: 12px; }
+.modal-actions .button { min-height: 54px; font-size: 0.95rem; }
 
 @media (max-width: 900px) {
   .student-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* Tablet portrait: the four nav actions keep their labels, the wordmark makes way for them. */
+@media (max-width: 860px) {
+  .brand > span:last-child { display: none; }
+}
+
+/* Tablet portrait and below: the tiles no longer fit five across, so they become full-width rows
+   (emoji, label, check) which are still one tap each. */
 @media (max-width: 680px) {
-  .topbar { min-height: 62px; padding: 0 15px; }
+  .topbar { min-height: 62px; padding: 0 12px; }
   .privacy-note { display: none; }
-  .topbar-actions { gap: 12px; }
-  .topbar-actions a, .text-button { font-size: 0.76rem; }
+  .topbar-actions { gap: 4px; }
+  .nav-button { width: 44px; padding: 0; justify-content: center; }
+  .nav-button > span { display: none; }
   .setup-view { width: min(500px, calc(100% - 24px)); padding-top: 20px; }
-  .gradebook-view { width: min(600px, calc(100% - 24px)); padding-top: 36px; }
-  .page-heading { align-items: flex-start; flex-direction: column; gap: 18px; }
-  .class-total { width: 100%; text-align: left; }
+  .gradebook-view { width: min(600px, calc(100% - 24px)); padding-top: 18px; }
+  .page-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .rename-link { min-height: 36px; padding: 0 10px; }
+  .rename-link > span { display: none; }
+  .rename-form { flex-wrap: wrap; width: 100%; }
+  .rename-input { width: 100%; flex-basis: 100%; }
   .student-grid { grid-template-columns: 1fr; }
+  .student-card { min-height: 96px; padding: 14px 16px; gap: 12px; }
+  .initials { width: 50px; height: 50px; border-radius: 14px; font-size: 0.84rem; }
+  .student-name { font-size: 0.98rem; margin-bottom: 7px; }
+  .bubbles > span { width: 26px; height: 26px; font-size: 0.84rem; }
+  .dimension-tiles { grid-template-columns: 1fr; gap: 8px; }
+  .dimension-tile {
+    min-height: 64px;
+    padding: 8px 14px 8px 10px;
+    flex-direction: row;
+    text-align: left;
+  }
+  .dimension-copy { flex: 1 1 auto; }
+  .dimension-copy strong { margin-bottom: 1px; font-size: 0.92rem; }
+  .dimension-emoji { width: 44px; height: 44px; border-radius: 12px; font-size: 1.2rem; }
+  .tile-check { position: static; flex: 0 0 auto; }
 }
 
 @media (max-width: 440px) {
   .brand > span:last-child { display: none; }
-  .topbar-actions { gap: 10px; }
   .grade-modal { width: calc(100% - 12px); max-height: calc(100vh - 12px); border-radius: 16px; }
   .grade-modal form { padding: 18px; }
   .modal-heading { grid-template-columns: auto 1fr; }
@@ -476,6 +668,8 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; }
+  .nav-button .spin { animation: none; }
+  .menu { animation: none; }
 }
 
 /* Onboarding ladder. A row is [mark] [title + hint] [action]; rows below the current one are

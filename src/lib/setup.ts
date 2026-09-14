@@ -1,9 +1,11 @@
-// What this device remembers about onboarding. Nothing here is sensitive: a spreadsheet ID and
-// name, and whether the teacher has been through the "make a copy" step.
+// What this device remembers about onboarding. Nothing here is sensitive: spreadsheet IDs and
+// names, and whether the teacher has been through the "make a copy" step.
 
 const SHEET_ID_KEY = 'participation-tracker.sheet-id'
 const SHEET_NAME_KEY = 'participation-tracker.sheet-name'
+const RECENT_SHEETS_KEY = 'participation-tracker.recent-sheets'
 const TEMPLATE_COPIED_KEY = 'participation-tracker.template-copied'
+const RECENT_LIMIT = 8
 
 export interface RememberedSpreadsheet {
   id: string
@@ -32,14 +34,26 @@ export function getRememberedSpreadsheet(): RememberedSpreadsheet | null {
   return id ? { id, name: read(SHEET_NAME_KEY) } : null
 }
 
+/** Makes `sheet` the current grade book and moves it to the front of the recent list. */
 export function rememberSpreadsheet(sheet: RememberedSpreadsheet): void {
   write(SHEET_ID_KEY, sheet.id)
   write(SHEET_NAME_KEY, sheet.name)
+  const others = getRecentSpreadsheets().filter((entry) => entry.id !== sheet.id)
+  write(RECENT_SHEETS_KEY, JSON.stringify([sheet, ...others].slice(0, RECENT_LIMIT)))
 }
 
-export function forgetSpreadsheet(): void {
-  write(SHEET_ID_KEY, null)
-  write(SHEET_NAME_KEY, null)
+/** Every grade book opened on this device, most recent first. Lets a teacher with several classes
+ *  switch without going back through the Drive picker. */
+export function getRecentSpreadsheets(): RememberedSpreadsheet[] {
+  try {
+    const parsed: unknown = JSON.parse(read(RECENT_SHEETS_KEY) || '[]')
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((entry): entry is RememberedSpreadsheet => !!entry && typeof entry.id === 'string' && !!entry.id)
+      .map((entry) => ({ id: entry.id, name: typeof entry.name === 'string' ? entry.name : '' }))
+  } catch {
+    return []
+  }
 }
 
 export function hasCopiedTemplate(): boolean {

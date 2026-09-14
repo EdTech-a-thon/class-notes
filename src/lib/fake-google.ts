@@ -45,6 +45,13 @@ export async function fakeLoadGradebook(spreadsheetId: string): Promise<Gradeboo
   }
 }
 
+export async function fakeRenameSpreadsheet(spreadsheetId: string, title: string): Promise<string> {
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  if (spreadsheetId !== SHEET.id) throw new Error('No such spreadsheet in the fake Drive.')
+  SHEET.name = title
+  return title
+}
+
 export async function fakeUpdateGrade(student: Student): Promise<number> {
   await new Promise((resolve) => setTimeout(resolve, 250))
   const index = students?.findIndex((entry) => entry.name === student.name) ?? -1

@@ -1,4 +1,4 @@
-import { FAKE_GOOGLE, fakeLoadGradebook, fakeUpdateGrade } from './fake-google'
+import { FAKE_GOOGLE, fakeLoadGradebook, fakeRenameSpreadsheet, fakeUpdateGrade } from './fake-google'
 import { DIMENSIONS, type Gradebook, type Grades, type Student } from './types'
 
 const API = 'https://sheets.googleapis.com/v4/spreadsheets'
@@ -254,6 +254,21 @@ export function updateGrade(
     )
   }
   return writeGrade(spreadsheetId, student, dayKey, token)
+}
+
+/** Renames the spreadsheet. The Sheets title is the Drive file name, and drive.file covers metadata
+ *  on files the teacher picked, so no Drive API call is needed. Returns the title Google stored. */
+export async function renameSpreadsheet(spreadsheetId: string, title: string, token: string): Promise<string> {
+  const trimmed = title.trim()
+  if (!trimmed) throw new Error('Give the grade book a name.')
+  if (FAKE_GOOGLE) return fakeRenameSpreadsheet(spreadsheetId, trimmed)
+  await googleFetch(`${API}/${encodeURIComponent(spreadsheetId)}:batchUpdate`, token, {
+    method: 'POST',
+    body: JSON.stringify({
+      requests: [{ updateSpreadsheetProperties: { properties: { title: trimmed }, fields: 'title' } }],
+    }),
+  })
+  return trimmed
 }
 
 export function isAuthorizationError(error: unknown): boolean {
