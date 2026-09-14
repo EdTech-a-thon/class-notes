@@ -656,8 +656,8 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
   .student-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* Tablet portrait: the four nav actions keep their labels, the wordmark makes way for them. */
-@media (max-width: 860px) {
+/* Tablet: the view switch and nav actions keep their labels, the wordmark makes way for them. */
+@media (max-width: 1080px) {
   .brand > span:last-child { display: none; }
 }
 
@@ -830,4 +830,334 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 }
 @media (prefers-reduced-motion: reduce) {
   .toast, .student-card.just-saved .score { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Notes: the observation log. Two views share the top bar (Today / Notes), one composer dialog
+   serves both, and the Notes screen groups everything by student or by subject for report cards.
+   --------------------------------------------------------------------------------------------- */
+
+/* Today / Notes switch: a two-tab pill at the start of the nav, labels hidden on phones. */
+.view-switch {
+  margin-right: 6px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #f3f5f9;
+  display: inline-flex;
+  gap: 2px;
+}
+.view-tab {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  color: #59657d;
+  background: transparent;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+.view-tab:hover { color: var(--ink); }
+.view-tab[aria-selected="true"] {
+  color: var(--blue);
+  background: var(--paper);
+  box-shadow: 0 2px 8px rgba(57, 74, 112, 0.12);
+}
+.view-count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  color: #4557c6;
+  background: var(--blue-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 22px;
+  text-align: center;
+}
+.view-tab[aria-selected="true"] .view-count { color: white; background: var(--blue); }
+
+.heading-side { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.new-note-button { min-height: 52px; padding: 0 20px 0 16px; gap: 8px; font-size: 0.95rem; }
+
+/* Shortcut out of the grade editor into the composer, pre-filled with that student. */
+.note-shortcut {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 18px;
+  padding: 0 16px;
+  border: 1px dashed #c9d1e2;
+  border-radius: 12px;
+  color: #46516a;
+  background: #fafbfd;
+  font-size: 0.92rem;
+  font-weight: 650;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.note-shortcut:hover { color: var(--blue); border-color: var(--blue); background: var(--blue-soft); }
+.note-shortcut svg { color: var(--blue); flex: 0 0 auto; }
+
+/* Composer dialog: same shell as the grade editor. */
+.note-modal {
+  width: min(880px, calc(100% - 24px));
+  max-height: calc(100vh - 24px);
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 30px 80px rgba(29, 40, 68, 0.24);
+  overflow: auto;
+}
+.note-modal::backdrop { background: rgba(34, 43, 64, 0.48); }
+.note-modal form { padding: 28px; }
+.note-heading { grid-template-columns: 1fr; }
+.note-heading h2 { min-height: 1.3em; }
+
+.chip-group { margin: 22px 0 0; padding: 0; border: 0; min-width: 0; }
+.chip-group legend { margin-bottom: 10px; color: var(--muted); font-size: 0.84rem; font-weight: 750; }
+.legend-hint { font-weight: 500; }
+.chip-empty { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Chips are the tap targets for students and subjects: 46px tall, a check badge when picked. */
+.chip {
+  position: relative;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--paper);
+  font-size: 0.9rem;
+  font-weight: 650;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+.chip:hover { border-color: #cbd3e3; }
+.chip:not(:disabled):active { transform: scale(0.97); }
+.chip.selected { border-color: var(--blue); background: var(--blue-soft); color: #3446b8; }
+.chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.student-chip { padding-left: 5px; }
+.chip-initials {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #45516a;
+  background: var(--sky-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.chip-initials.color-2 { background: var(--yellow-soft); }
+.chip-initials.color-3 { background: var(--purple-soft); }
+.chip-initials.color-4 { background: var(--green-soft); }
+.chip-initials.color-5 { background: var(--coral-soft); }
+.chip-check {
+  width: 20px;
+  height: 20px;
+  margin-right: -4px;
+  border-radius: 50%;
+  color: white;
+  background: var(--blue);
+  display: none;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.chip.selected .chip-check { display: grid; }
+.chip-emoji { font-size: 1.05rem; line-height: 1; }
+.add-chip { border-style: dashed; color: var(--blue); background: transparent; }
+.add-chip:hover { border-color: var(--blue); background: var(--blue-soft); }
+
+.new-subject { margin-top: 10px; display: flex; gap: 8px; align-items: stretch; }
+.new-subject input {
+  min-height: 46px;
+  padding: 0 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: 0.95rem;
+}
+.new-subject input:focus { border-color: var(--blue); outline: 3px solid rgba(91, 111, 232, 0.28); outline-offset: 2px; }
+.new-subject-emoji { width: 64px; text-align: center; font-size: 1.15rem; }
+.new-subject-name { flex: 1 1 auto; min-width: 0; }
+.new-subject-add { min-height: 46px; padding: 0 18px; }
+.new-subject-cancel { min-height: 46px; width: 46px; padding: 0; }
+
+.note-label { margin: 22px 0 8px; color: var(--muted); font-size: 0.84rem; font-weight: 750; display: block; }
+.note-textarea {
+  width: 100%;
+  min-height: 132px;
+  padding: 14px 16px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: 1.08rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+.note-textarea:focus { border-color: var(--blue); outline: 3px solid rgba(91, 111, 232, 0.28); outline-offset: 2px; }
+.note-meta { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.date-field { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 0.86rem; font-weight: 700; }
+.date-field input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid var(--line);
+  border-radius: 11px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.date-field input:focus { border-color: var(--blue); outline: 3px solid rgba(91, 111, 232, 0.28); outline-offset: 2px; }
+.note-hint { margin: 0; color: #30775b; font-size: 0.86rem; font-weight: 650; }
+
+.note-actions.with-delete { grid-template-columns: auto 1fr 1.6fr; }
+.button.danger { border-color: #f0cbd0; color: var(--danger); background: var(--danger-soft); gap: 8px; }
+.button.danger:not(:disabled):hover { border-color: var(--danger); background: #ffe3e7; }
+
+/* Notes screen ------------------------------------------------------------------------------- */
+.filter-bar {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.filter-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 180px; }
+.filter-field > span:first-child { color: var(--muted); font-size: 0.74rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.filter-field select, .search-box {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.filter-field select:focus, .search-box:focus-within { border-color: var(--blue); outline: 3px solid rgba(91, 111, 232, 0.28); outline-offset: 2px; }
+.filter-search { flex: 2 1 240px; }
+.search-box { display: flex; align-items: center; gap: 8px; color: #8b94a8; }
+.search-box input { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 0.95rem; font-weight: 600; }
+.search-box input:focus { outline: none; }
+.clear-filters { min-height: 46px; display: inline-flex; align-items: center; gap: 4px; }
+
+.group-explainer { margin: 0 0 12px; color: var(--muted); font-size: 0.88rem; font-weight: 600; }
+.note-groups { display: grid; gap: 16px; }
+.note-group {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: 0 4px 14px rgba(57, 74, 112, 0.035);
+  overflow: hidden;
+}
+.note-group-heading {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: #fafbfd;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.note-group-heading h2 { margin: 0; min-width: 0; flex: 1 1 auto; font-size: 1.1rem; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-initials { width: 40px; height: 40px; border-radius: 12px; font-size: 0.78rem; }
+.group-emoji { width: 40px; height: 40px; border-radius: 12px; background: #f2f4f8; font-size: 1.25rem; display: grid; place-items: center; }
+.group-count {
+  min-width: 26px;
+  padding: 0 8px;
+  border-radius: 13px;
+  color: #59657d;
+  background: #eef1f6;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 26px;
+  text-align: center;
+}
+.group-copy {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #59657d;
+  background: var(--paper);
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.group-copy:hover { color: var(--blue); border-color: #c9d1e2; background: var(--blue-soft); }
+
+.note-list { margin: 0; padding: 6px; list-style: none; display: grid; gap: 4px; }
+.note-card {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.note-card:hover { border-color: #c9d1e2; background: #f8f9fc; }
+.note-topline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.note-topline time { color: var(--muted); font-size: 0.8rem; font-weight: 700; }
+.note-tag {
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: #4557c6;
+  background: var(--blue-soft);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.note-tag.student-tag { color: #30775b; background: var(--green-soft); }
+.note-text { font-size: 1rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 680px) {
+  .view-switch { margin-right: 2px; }
+  .view-tab { padding: 0 10px; }
+  .view-tab > span:not(.view-count) { display: none; }
+  .heading-side { width: 100%; justify-content: space-between; }
+  .new-note-button { min-height: 48px; }
+  .note-modal { width: calc(100% - 12px); max-height: calc(100vh - 12px); border-radius: 16px; }
+  .note-modal form { padding: 18px; }
+  .chip { min-height: 44px; font-size: 0.86rem; }
+  .note-actions.with-delete { grid-template-columns: 1fr 1fr; }
+  .note-actions.with-delete .danger { grid-column: 1 / -1; }
+  .note-group-heading { padding: 12px 14px; }
+  .group-copy > span { display: none; }
+  .group-copy { width: 40px; padding: 0; justify-content: center; }
 }

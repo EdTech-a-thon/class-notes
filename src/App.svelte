@@ -4,13 +4,16 @@
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right'
   import Check from '@lucide/svelte/icons/check'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
+  import ClipboardCheck from '@lucide/svelte/icons/clipboard-check'
   import CopyPlus from '@lucide/svelte/icons/copy-plus'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
   import Lock from '@lucide/svelte/icons/lock'
   import LogOut from '@lucide/svelte/icons/log-out'
   import Maximize from '@lucide/svelte/icons/maximize'
   import Minimize from '@lucide/svelte/icons/minimize'
+  import NotebookPen from '@lucide/svelte/icons/notebook-pen'
   import Pencil from '@lucide/svelte/icons/pencil'
+  import Plus from '@lucide/svelte/icons/plus'
   import RefreshCw from '@lucide/svelte/icons/refresh-cw'
   import X from '@lucide/svelte/icons/x'
   import {
@@ -40,19 +43,28 @@
     type RememberedSpreadsheet,
   } from './lib/setup'
   import {
+    addNotes,
     addStudents,
+    addSubject,
+    deleteNote,
     isAuthorizationError,
     loadGradebook,
     parseRosterNames,
     renameSpreadsheet,
     totalFor,
     updateGrade,
+    updateNote,
+    type NoteDraft,
   } from './lib/sheets'
-  import { DIMENSIONS, type DimensionKey, type Gradebook, type Grades, type Student } from './lib/types'
+  import { DIMENSIONS, type DimensionKey, type Gradebook, type Grades, type Note, type Student, type Subject } from './lib/types'
+  import NoteEditor from './NoteEditor.svelte'
+  import NotesView from './NotesView.svelte'
 
   type Session = 'checking' | 'signed_out' | 'not_connected' | 'invalid' | 'ready'
+  type View = 'roster' | 'notes'
 
   let session: Session = 'checking'
+  let view: View = 'roster'
   let connection: DriveConnection | null = null
   let gradebook: Gradebook | null = null
   let autoOpening = false // a returning teacher goes straight to the roster, no step list
@@ -82,6 +94,8 @@
   let rosterText = ''
   let rosterOpen = false
   let rosterTextarea: HTMLTextAreaElement | undefined
+  let noteEditor: ReturnType<typeof NoteEditor> | undefined
+  let noteOpen = false
 
   onMount(() => {
     spreadsheet = getRememberedSpreadsheet()
@@ -204,6 +218,7 @@
       selectedStudent = null
       spreadsheet = null
       recent = []
+      view = 'roster'
       templateCopied = false
       autoOpening = false
       connection = null
@@ -372,6 +387,99 @@
     }
   }
 
+  // Notes are written straight to the "Notes" tab. Each handler resolves true on success so the
+  // editor knows to close; on failure the message shows inside the editor and nothing is lost.
+  async function saveNotes(drafts: NoteDraft[]): Promise<boolean> {
+    if (!gradebook) return false
+    saving = true
+    resetMessages()
+    try {
+      const token = await authorize()
+      const added = await addNotes(gradebook.id, drafts, token)
+      gradebook = { ...gradebook, notes: [...gradebook.notes, ...added] }
+      return true
+    } catch (caught) {
+      handleFailure(caught)
+      return false
+    } finally {
+      saving = false
+    }
+  }
+
+  async function saveNoteEdit(note: Note): Promise<boolean> {
+    if (!gradebook) return false
+    saving = true
+    resetMessages()
+    try {
+      const token = await authorize()
+      await updateNote(gradebook.id, note, token)
+      gradebook = { ...gradebook, notes: gradebook.notes.map((entry) => (entry.row === note.row ? note : entry)) }
+      return true
+    } catch (caught) {
+      handleFailure(caught)
+      return false
+    } finally {
+      saving = false
+    }
+  }
+
+  async function removeNote(note: Note): Promise<boolean> {
+    if (!gradebook) return false
+    saving = true
+    resetMessages()
+    try {
+      const token = await authorize()
+      await deleteNote(gradebook.id, gradebook.notesSheetId, note.row, token)
+      // The sheet closed the gap, so every note below moves up one row.
+      gradebook = {
+        ...gradebook,
+        notes: gradebook.notes
+          .filter((entry) => entry.row !== note.row)
+          .map((entry) => (entry.row > note.row ? { ...entry, row: entry.row - 1 } : entry)),
+      }
+      return true
+    } catch (caught) {
+      handleFailure(caught)
+      return false
+    } finally {
+      saving = false
+    }
+  }
+
+  async function createSubject(subject: Subject): Promise<boolean> {
+    if (!gradebook) return false
+    saving = true
+    resetMessages()
+    try {
+      const token = await authorize()
+      await addSubject(gradebook.id, subject, token)
+      gradebook = { ...gradebook, subjects: [...gradebook.subjects, subject] }
+      return true
+    } catch (caught) {
+      handleFailure(caught)
+      return false
+    } finally {
+      saving = false
+    }
+  }
+
+  function newNote(student?: string) {
+    resetMessages()
+    void noteEditor?.open(student)
+  }
+
+  function editNote(note: Note) {
+    resetMessages()
+    void noteEditor?.edit(note)
+  }
+
+  // From the grade editor: close it and open the composer with this student already picked.
+  function noteAboutSelected() {
+    const name = selectedStudent?.name
+    modal.close()
+    if (name) newNote(name)
+  }
+
   function toggleSwitcher() {
     if (!switcherOpen) recent = getRecentSpreadsheets()
     switcherOpen = !switcherOpen
@@ -428,8 +536,8 @@
 <svelte:document onfullscreenchange={syncFullscreen} />
 
 <svelte:head>
-  <title>Participation Grade Book</title>
-  <meta name="description" content="Record daily participation directly in your own Google Sheet." />
+  <title>Class Notes</title>
+  <meta name="description" content="Daily participation and observation notes, saved straight to your own Google Sheet." />
 </svelte:head>
 
 <div class="app-shell">
@@ -438,11 +546,32 @@
       <span class="brand-mark" aria-hidden="true">
         <span></span><span></span><span></span><span></span><span></span>
       </span>
-      <span>Participation Grade Book</span>
+      <span>Class Notes</span>
     </div>
 
     {#if gradebook}
       <nav class="topbar-actions" aria-label="Grade book actions">
+        <div class="view-switch" role="tablist" aria-label="View">
+          <button
+            class="view-tab"
+            role="tab"
+            aria-selected={view === 'roster'}
+            onclick={() => (view = 'roster')}
+            title="Today’s participation"
+          >
+            <ClipboardCheck size={18} aria-hidden="true" /><span>Today</span>
+          </button>
+          <button
+            class="view-tab"
+            role="tab"
+            aria-selected={view === 'notes'}
+            onclick={() => (view = 'notes')}
+            title="Notes"
+          >
+            <NotebookPen size={18} aria-hidden="true" /><span>Notes</span>
+            {#if gradebook.notes.length}<span class="view-count">{gradebook.notes.length}</span>{/if}
+          </button>
+        </div>
         <a class="nav-button" href={sheetUrl(gradebook.id)} target="_blank" rel="noreferrer" title="Open sheet in Google Sheets">
           <span>Open sheet</span><ArrowUpRight size={18} aria-hidden="true" />
         </a>
@@ -536,7 +665,25 @@
     {/if}
   </header>
 
-  {#if gradebook}
+  {#if gradebook && view === 'notes'}
+    <main class="gradebook-view notes-view">
+      <NotesView
+        notes={gradebook.notes}
+        students={gradebook.students}
+        subjects={gradebook.subjects}
+        {loading}
+        onnew={() => newNote()}
+        onedit={editNote}
+      />
+    </main>
+    {#if error && !noteOpen}
+      <div class="toast" role="alert">
+        <span class="toast-icon" aria-hidden="true">!</span>
+        <span class="toast-text">{error}</span>
+        <button class="toast-dismiss" onclick={() => (error = '')} aria-label="Dismiss">×</button>
+      </div>
+    {/if}
+  {:else if gradebook}
     <main class="gradebook-view">
       <section class="page-heading" aria-labelledby="roster-heading">
         <div class="heading-text">
@@ -569,9 +716,16 @@
           {/if}
           <p class="subtext">{gradebook.dayLabel} · {gradebook.students.length} students</p>
         </div>
-        <div class="class-total" aria-label={classPoints + ' out of ' + possiblePoints + ' class points'}>
-          <strong>{classPoints}</strong><span> / {possiblePoints}</span>
-          <small>class points</small>
+        <div class="heading-side">
+          {#if gradebook.students.length}
+            <button class="button primary new-note-button" type="button" onclick={() => newNote()} disabled={loading}>
+              <Plus size={20} aria-hidden="true" /><span>New note</span>
+            </button>
+          {/if}
+          <div class="class-total" aria-label={classPoints + ' out of ' + possiblePoints + ' class points'}>
+            <strong>{classPoints}</strong><span> / {possiblePoints}</span>
+            <small>class points</small>
+          </div>
         </div>
       </section>
 
@@ -611,7 +765,7 @@
         </section>
       {/if}
     </main>
-    {#if error && !selectedStudent && !rosterOpen}
+    {#if error && !selectedStudent && !rosterOpen && !noteOpen}
       <div class="toast" role="alert">
         <span class="toast-icon" aria-hidden="true">!</span>
         <span class="toast-text">{error}</span>
@@ -737,11 +891,11 @@
         <li class={'step ' + stepState(5)} aria-current={stepState(5) === 'current' ? 'step' : undefined}>
           <span class="step-mark" aria-hidden="true">5</span>
           <div class="step-text">
-            <strong>Start grading</strong>
-            <span>Today’s roster, one tap per student, saved straight to your sheet.</span>
+            <strong>Open your class</strong>
+            <span>Today’s roster and your notes, saved straight to your sheet.</span>
           </div>
           <button class="button primary step-action" onclick={startGrading} disabled={loading || stepState(5) !== 'current'}>
-            {loading && currentStep === 5 ? 'Opening…' : 'Start grading'}
+            {loading && currentStep === 5 ? 'Opening…' : 'Open class'}
           </button>
         </li>
       </ol>
@@ -847,6 +1001,11 @@
         </div>
       </fieldset>
 
+      <button class="note-shortcut" type="button" onclick={noteAboutSelected} disabled={saving}>
+        <NotebookPen size={18} aria-hidden="true" />
+        <span>Write a note about {selectedStudent.name.split(' ')[0]}</span>
+      </button>
+
       {#if error}<p class="modal-error" role="alert">{error}</p>{/if}
 
       <footer class="modal-actions">
@@ -858,3 +1017,19 @@
     </form>
   {/if}
 </dialog>
+
+{#if gradebook}
+  <NoteEditor
+    bind:this={noteEditor}
+    students={gradebook.students}
+    subjects={gradebook.subjects}
+    todayKey={gradebook.dayKey}
+    {saving}
+    {error}
+    onsave={saveNotes}
+    onupdate={saveNoteEdit}
+    ondelete={removeNote}
+    onaddsubject={createSubject}
+    onopenchange={(open) => (noteOpen = open)}
+  />
+{/if}

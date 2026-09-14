@@ -1,7 +1,7 @@
 {
-  "name": "Participation Grade Book",
-  "short_name": "Participation",
-  "description": "Record daily participation directly in your own Google Sheet.",
+  "name": "Class Notes",
+  "short_name": "Class Notes",
+  "description": "Daily participation and observation notes, saved straight to your own Google Sheet.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6f8fc",

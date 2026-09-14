@@ -1,5 +1,5 @@
 /**
- * Participation Grade Book — template creator
+ * Class Notes — template creator (participation grade book + observation notes)
  *
  * One-time use:
  *   1. Go to https://script.google.com and create a new project.
@@ -12,13 +12,15 @@
  * Running the function again creates a separate, fresh template.
  */
 
-var TEMPLATE_TITLE = 'Participation Grade Book Template';
+var TEMPLATE_TITLE = 'Class Notes Template';
 var TEMPLATE_TIME_ZONE = 'America/New_York';
 
 var TAB_DAY = 'Day Records';
 var TAB_WEEKLY = 'Weekly Grades';
 var TAB_ROSTER = 'Class Roster';
 var TAB_WEEKS = 'Week Ranges';
+var TAB_SUBJECTS = 'Subjects';
+var TAB_NOTES = 'Notes';
 
 var DIMENSIONS = [
   'Timely-ness',
@@ -26,6 +28,21 @@ var DIMENSIONS = [
   'Attentive-ness',
   'Contribution-ness',
   'Collaboration-ness'
+];
+
+// Starting subjects for the notes. Teachers add, rename, or delete rows on the Subjects tab; keep
+// this list in step with DEFAULT_SUBJECTS in src/lib/types.ts, which seeds older copies.
+var DEFAULT_SUBJECTS = [
+  ['Literacy', '📖'],
+  ['Math', '🔢'],
+  ['Science & Inquiry', '🔬'],
+  ['Social-Emotional', '💛'],
+  ['Self-Regulation', '🧘'],
+  ['Play & Collaboration', '🧩'],
+  ['Fine Motor', '✂️'],
+  ['Gross Motor', '🏃'],
+  ['Arts & Creativity', '🎨'],
+  ['Language & Communication', '🗣️']
 ];
 
 var COLORS = {
@@ -53,16 +70,22 @@ function createParticipationTemplate() {
   var day = ss.insertSheet(TAB_DAY);
   var weeks = ss.insertSheet(TAB_WEEKS);
   var weekly = ss.insertSheet(TAB_WEEKLY);
+  var subjects = ss.insertSheet(TAB_SUBJECTS);
+  var notes = ss.insertSheet(TAB_NOTES);
 
   buildRoster_(roster);
   buildDayRecords_(day);
   buildWeekRanges_(weeks);
   buildWeeklyGrades_(weekly);
+  buildSubjects_(subjects);
+  buildNotes_(notes);
 
   roster.setTabColor(COLORS.coral);
   day.setTabColor(COLORS.blue);
   weeks.setTabColor('#e7b94e');
   weekly.setTabColor(COLORS.green);
+  subjects.setTabColor('#8e6fe8');
+  notes.setTabColor('#8e6fe8');
 
   ss.setActiveSheet(roster);
   ss.moveActiveSheet(1);
@@ -216,6 +239,38 @@ function buildWeeklyGrades_(sheet) {
   sheet.setColumnWidth(1, 220);
   sheet.setColumnWidth(2, 90);
   sheet.setColumnWidth(3, 110);
+}
+
+function buildSubjects_(sheet) {
+  prepareSheet_(sheet, ['Subject', 'Emoji'], '#8e6fe8');
+
+  sheet.getRange('A1').setNote(
+    'One subject or topic per row. Notes are filed under these; add, rename, or delete rows freely.'
+  );
+  sheet.getRange('B1').setNote('Optional. Shown next to the subject in the app.');
+
+  sheet.getRange(2, 1, DEFAULT_SUBJECTS.length, 2).setValues(DEFAULT_SUBJECTS);
+  sheet.setColumnWidth(1, 240);
+  sheet.setColumnWidth(2, 80);
+  sheet.getRange('A2:B1000').setNumberFormat('@');
+  sheet.getRange('B2:B1000').setHorizontalAlignment('center');
+}
+
+function buildNotes_(sheet) {
+  prepareSheet_(sheet, ['Date', 'Student', 'Subject', 'Note'], '#8e6fe8');
+
+  sheet.getRange('A1').setNote(
+    'The app adds one row per observation. Rows can be edited or deleted here; do not rename this tab or its headers.'
+  );
+  sheet.getRange('B1').setNote('Must match a name on the Class Roster tab exactly.');
+  sheet.getRange('C1').setNote('A subject from the Subjects tab. Leave blank for a general note.');
+
+  sheet.getRange('A2:A1000').setNumberFormat('yyyy-mm-dd');
+  sheet.getRange('D2:D1000').setWrap(true);
+  sheet.setColumnWidth(1, 115);
+  sheet.setColumnWidth(2, 200);
+  sheet.setColumnWidth(3, 200);
+  sheet.setColumnWidth(4, 520);
 }
 
 function prepareSheet_(sheet, headers, headerColor) {

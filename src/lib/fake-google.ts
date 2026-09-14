@@ -2,8 +2,8 @@
 // (local click-through with scripts/mock-broker.mjs). Vite replaces the env check at build time, so
 // none of this ships when the flag is unset.
 
-import type { Gradebook, PickedSpreadsheet, Student } from './types'
-import { defaultGrades } from './sheets'
+import { DEFAULT_SUBJECTS, type Gradebook, type Note, type PickedSpreadsheet, type Student, type Subject } from './types'
+import { defaultGrades, type NoteDraft } from './sheets'
 
 export const FAKE_GOOGLE = import.meta.env.VITE_FAKE_GOOGLE === 'true'
 
@@ -16,6 +16,26 @@ const ROSTER = EMPTY_ROSTER
 const SHEET: PickedSpreadsheet = { id: 'fake-sheet-id', name: 'Period 3 Participation', url: '#' }
 
 let students: Student[] | null = null
+let subjects: Subject[] = [...DEFAULT_SUBJECTS]
+let notes: Note[] | null = null
+
+function daysAgo(days: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  return date.toISOString().slice(0, 10)
+}
+
+// A few observations so the Notes screen has something to group and filter on first open.
+const SAMPLE_NOTES: NoteDraft[] = EMPTY_ROSTER
+  ? []
+  : [
+      { dateKey: daysAgo(0), student: 'Ben Okafor', subject: 'Social-Emotional', text: 'Shared the toy car with Diego and let him choose which one to keep.' },
+      { dateKey: daysAgo(0), student: 'Chloe Nguyen', subject: 'Math', text: 'Counted the blocks she was playing with and sorted them by colour without being asked.' },
+      { dateKey: daysAgo(1), student: 'Ben Okafor', subject: 'Literacy', text: 'Wrote his name with all letters facing the right way.' },
+      { dateKey: daysAgo(1), student: 'Ava Martinez', subject: 'Self-Regulation', text: 'Used the calm-down corner on her own after the block tower fell.' },
+      { dateKey: daysAgo(3), student: 'Chloe Nguyen', subject: 'Math', text: 'Made an AB pattern with the bear counters and explained it to Farah.' },
+      { dateKey: daysAgo(4), student: 'Emma Fischer', subject: 'Science & Inquiry', text: 'Asked why the ice melted faster near the window and tested it with two cups.' },
+    ]
 
 export function fakePickSpreadsheet(): Promise<PickedSpreadsheet | null> {
   const ok = window.confirm(`[Fake Google Picker]\n\nPick “${SHEET.name}”?\n\nCancel simulates closing the picker.`)
@@ -39,6 +59,7 @@ export async function fakeLoadGradebook(spreadsheetId: string): Promise<Gradeboo
     row: index + 2,
     grades: defaultGrades(),
   }))
+  notes ??= SAMPLE_NOTES.map((draft, index) => ({ ...draft, row: index + 2 }))
   const today = todayLabel()
   return {
     id: SHEET.id,
@@ -47,7 +68,41 @@ export async function fakeLoadGradebook(spreadsheetId: string): Promise<Gradeboo
     dayKey: today.key,
     dayLabel: today.label,
     students: students.map((student) => ({ ...student, grades: { ...student.grades } })),
+    subjects: subjects.map((subject) => ({ ...subject })),
+    notes: notes.map((note) => ({ ...note })),
+    notesSheetId: 3,
   }
+}
+
+export async function fakeAddNotes(spreadsheetId: string, drafts: NoteDraft[]): Promise<Note[]> {
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  if (spreadsheetId !== SHEET.id) throw new Error('No such spreadsheet in the fake Drive.')
+  notes ??= []
+  const added = drafts.map((draft, index) => ({ ...draft, row: notes!.length + index + 2 }))
+  notes.push(...added)
+  return added.map((note) => ({ ...note }))
+}
+
+export async function fakeUpdateNote(spreadsheetId: string, note: Note): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  if (spreadsheetId !== SHEET.id) throw new Error('No such spreadsheet in the fake Drive.')
+  const index = notes?.findIndex((entry) => entry.row === note.row) ?? -1
+  if (index < 0 || !notes) throw new Error('No such note in the fake sheet.')
+  notes[index] = { ...note }
+}
+
+export async function fakeDeleteNote(spreadsheetId: string, row: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  if (spreadsheetId !== SHEET.id) throw new Error('No such spreadsheet in the fake Drive.')
+  notes = (notes ?? [])
+    .filter((note) => note.row !== row)
+    .map((note) => (note.row > row ? { ...note, row: note.row - 1 } : note))
+}
+
+export async function fakeAddSubject(spreadsheetId: string, subject: Subject): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  if (spreadsheetId !== SHEET.id) throw new Error('No such spreadsheet in the fake Drive.')
+  subjects = [...subjects, { ...subject }]
 }
 
 export async function fakeAddStudents(spreadsheetId: string, names: string[]): Promise<void> {
