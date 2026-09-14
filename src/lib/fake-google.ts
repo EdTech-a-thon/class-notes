@@ -1,0 +1,54 @@
+// In-memory stand-ins for Google Picker and the Sheets API, used only when VITE_FAKE_GOOGLE=true
+// (local click-through with scripts/mock-broker.mjs). Vite replaces the env check at build time, so
+// none of this ships when the flag is unset.
+
+import type { Gradebook, PickedSpreadsheet, Student } from './types'
+import { defaultGrades } from './sheets'
+
+export const FAKE_GOOGLE = import.meta.env.VITE_FAKE_GOOGLE === 'true'
+
+const ROSTER = ['Ava Martinez', 'Ben Okafor', 'Chloe Nguyen', 'Diego Rossi', 'Emma Fischer', 'Farah Haddad']
+const SHEET: PickedSpreadsheet = { id: 'fake-sheet-id', name: 'Period 3 Participation', url: '#' }
+
+let students: Student[] | null = null
+
+export function fakePickSpreadsheet(): Promise<PickedSpreadsheet | null> {
+  const ok = window.confirm(`[Fake Google Picker]\n\nPick “${SHEET.name}”?\n\nCancel simulates closing the picker.`)
+  return Promise.resolve(ok ? SHEET : null)
+}
+
+function todayLabel(): { key: string; label: string } {
+  const now = new Date()
+  return {
+    key: now.toISOString().slice(0, 10),
+    label: new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(now),
+  }
+}
+
+export async function fakeLoadGradebook(spreadsheetId: string): Promise<Gradebook> {
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  if (spreadsheetId !== SHEET.id) throw new Error('This file does not have the expected “Day Records” columns.')
+  students ??= ROSTER.map((name, index) => ({
+    name,
+    initials: name.split(' ').map((part) => part[0]).join(''),
+    row: index + 2,
+    grades: defaultGrades(),
+  }))
+  const today = todayLabel()
+  return {
+    id: SHEET.id,
+    title: SHEET.name,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    dayKey: today.key,
+    dayLabel: today.label,
+    students: students.map((student) => ({ ...student, grades: { ...student.grades } })),
+  }
+}
+
+export async function fakeUpdateGrade(student: Student): Promise<number> {
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  const index = students?.findIndex((entry) => entry.name === student.name) ?? -1
+  if (index < 0 || !students) throw new Error('No such student in the fake sheet.')
+  students[index] = { ...student, row: index + 2 }
+  return index + 2
+}

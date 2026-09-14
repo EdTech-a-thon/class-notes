@@ -18,13 +18,14 @@
     templateCopyUrl,
   } from './lib/google'
   import {
-    forgetLastSpreadsheetId,
-    getLastSpreadsheetId,
-    isAuthorizationError,
-    loadGradebook,
-    totalFor,
-    updateGrade,
-  } from './lib/sheets'
+    forgetSpreadsheet,
+    getRememberedSpreadsheet,
+    hasCopiedTemplate,
+    markTemplateCopied,
+    rememberSpreadsheet,
+    type RememberedSpreadsheet,
+  } from './lib/setup'
+  import { isAuthorizationError, loadGradebook, totalFor, updateGrade } from './lib/sheets'
   import { DIMENSIONS, type DimensionKey, type Gradebook, type Grades, type Student } from './lib/types'
 
   type Session = 'checking' | 'signed_out' | 'not_connected' | 'invalid' | 'ready'
@@ -32,7 +33,9 @@
   let session: Session = 'checking'
   let connection: DriveConnection | null = null
   let gradebook: Gradebook | null = null
-  let savedSpreadsheetId = ''
+  let pendingGradebook: Gradebook | null = null // validated at pick time, revealed by "Start grading"
+  let spreadsheet: RememberedSpreadsheet | null = null
+  let templateCopied = false
   let selectedStudent: Student | null = null
   let draftGrades: Grades | null = null
   let loading = false
@@ -42,7 +45,8 @@
   let modal: HTMLDialogElement
 
   onMount(() => {
-    savedSpreadsheetId = getLastSpreadsheetId()
+    spreadsheet = getRememberedSpreadsheet()
+    templateCopied = hasCopiedTemplate()
     const arrival = consumeArrivalError()
     if (arrival === 'access_denied') notice = describeArrivalError(arrival)
     else if (arrival) error = describeArrivalError(arrival)
@@ -51,7 +55,13 @@
 
   $: classPoints = gradebook?.students.reduce((sum, student) => sum + totalFor(student.grades), 0) ?? 0
   $: possiblePoints = (gradebook?.students.length ?? 0) * DIMENSIONS.length
-  $: canUseDrive = session === 'ready'
+  // Onboarding is a strict ladder: a step is only actionable once every step above it is done.
+  $: signedIn = session !== 'checking' && session !== 'signed_out'
+  $: driveReady = session === 'ready'
+  $: stepsDone = [signedIn, driveReady, templateCopied || !!spreadsheet, !!spreadsheet, false]
+  $: currentStep = stepsDone.indexOf(false) + 1
+  $: stepState = (step: number) =>
+    stepsDone[step - 1] ? 'done' : step === currentStep ? 'current' : 'locked'
 
   function resetMessages() {
     notice = ''
@@ -87,6 +97,7 @@
       if (caught.signedOut || caught.needsConnection) {
         clearAuthorization()
         gradebook = null
+        pendingGradebook = null
       }
     } else if (isAuthorizationError(caught)) {
       clearAuthorization()
@@ -126,6 +137,7 @@
     } finally {
       clearAuthorization()
       gradebook = null
+      pendingGradebook = null
       selectedStudent = null
       connection = null
       session = 'signed_out'
@@ -139,7 +151,6 @@
     try {
       const token = await authorize()
       gradebook = await loadGradebook(id, token)
-      savedSpreadsheetId = id
       notice = 'Ready for ' + gradebook.dayLabel + '.'
     } catch (caught) {
       handleFailure(caught)
@@ -148,17 +159,40 @@
     }
   }
 
-  async function chooseGradebook() {
+  function copyTemplate() {
+    markTemplateCopied()
+    templateCopied = true
+  }
+
+  async function chooseSpreadsheet() {
     resetMessages()
     loading = true
     try {
       const picked = await pickSpreadsheet()
-      if (picked) await openGradebook(picked.id)
+      if (!picked) return
+      // Check the tabs now so a wrong file is caught on this step, not the next one.
+      const token = await authorize()
+      pendingGradebook = await loadGradebook(picked.id, token)
+      spreadsheet = { id: picked.id, name: pendingGradebook.title || picked.name }
+      rememberSpreadsheet(spreadsheet)
+      templateCopied = true
     } catch (caught) {
       handleFailure(caught)
     } finally {
       loading = false
     }
+  }
+
+  async function startGrading() {
+    if (!spreadsheet) return
+    if (pendingGradebook) {
+      resetMessages()
+      gradebook = pendingGradebook
+      pendingGradebook = null
+      notice = 'Ready for ' + gradebook.dayLabel + '.'
+      return
+    }
+    await openGradebook(spreadsheet.id)
   }
 
   function editStudent(student: Student) {
@@ -198,10 +232,11 @@
     }
   }
 
-  function switchGradebook() {
-    forgetLastSpreadsheetId()
+  function switchSpreadsheet() {
+    forgetSpreadsheet()
+    spreadsheet = null
+    pendingGradebook = null
     gradebook = null
-    savedSpreadsheetId = ''
     selectedStudent = null
     resetMessages()
   }
@@ -231,7 +266,7 @@
         <button class="text-button" onclick={() => openGradebook(gradebook!.id)} disabled={loading}>
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
-        <button class="text-button" onclick={switchGradebook}>Switch grade book</button>
+        <button class="text-button" onclick={switchSpreadsheet}>Switch grade book</button>
         <button class="text-button" onclick={endSession} disabled={loading}>Sign out</button>
       </nav>
     {:else if connection?.googleEmail}
@@ -301,7 +336,7 @@
       <section class="setup-intro">
         <div class="setup-icon" aria-hidden="true">✓</div>
         <h1>Set up your grade book</h1>
-        <p>Make a copy of the template, then choose your copy. That’s it.</p>
+        <p>Five quick steps. Each one unlocks the next.</p>
       </section>
 
       {#if error}
@@ -316,98 +351,111 @@
         </div>
       {/if}
 
-      {#if session === 'checking'}
-        <section class="resume-panel auth-panel">
-          <div>
-            <p class="eyebrow">One moment</p>
-            <h2>Checking your Google sign-in…</h2>
+      <ol class="steps" aria-label="Setup steps">
+        <!-- 1. Sign in -->
+        <li class={'step ' + stepState(1)} aria-current={stepState(1) === 'current' ? 'step' : undefined}>
+          <span class="step-mark" aria-hidden="true">{signedIn ? '✓' : '1'}</span>
+          <div class="step-text">
+            <strong>{signedIn ? 'Signed in with Google' : 'Sign in with Google'}</strong>
+            <span>
+              {#if signedIn && connection?.googleEmail}
+                {connection.googleEmail}
+              {:else if session === 'checking'}
+                Checking whether you are already signed in…
+              {:else}
+                So we know which Google account to work with.
+              {/if}
+            </span>
           </div>
-        </section>
-      {:else if session === 'signed_out'}
-        <section class="resume-panel auth-panel">
-          <div>
-            <p class="eyebrow">Start here</p>
-            <h2>Sign in with Google</h2>
-            <p class="panel-note">You will come straight back here once Google confirms who you are.</p>
-          </div>
-          <button class="button primary" onclick={startSignIn} disabled={loading}>
-            {loading ? 'Opening Google…' : 'Sign in with Google'}
+          <button class="button primary step-action" onclick={startSignIn} disabled={loading || stepState(1) !== 'current'}>
+            {signedIn ? 'Signed in' : loading && currentStep === 1 ? 'Opening Google…' : 'Sign in with Google'}
           </button>
-        </section>
-      {:else if session === 'not_connected'}
-        <section class="resume-panel auth-panel">
-          <div>
-            <p class="eyebrow">Almost there</p>
-            <h2>Connect Google Drive</h2>
-            <p class="panel-note">Google will ask for access to files you choose — nothing else in your Drive.</p>
-          </div>
-          <button class="button primary" onclick={startConnectDrive} disabled={loading}>
-            {loading ? 'Opening Google…' : 'Connect Google Drive'}
-          </button>
-        </section>
-      {:else if session === 'invalid'}
-        <section class="resume-panel auth-panel warning">
-          <div>
-            <p class="eyebrow">Action needed</p>
-            <h2>Reconnect Google Drive</h2>
-            <p class="panel-note">
-              {connection?.lastError === 'admin_policy_enforced'
-                ? 'Your Google Workspace administrator has blocked this app. Ask them to allow it, then reconnect.'
-                : 'Google stopped accepting our access to your Drive. Reconnecting takes one click.'}
-            </p>
-          </div>
-          <button class="button primary" onclick={startConnectDrive} disabled={loading}>
-            {loading ? 'Opening Google…' : 'Reconnect Google Drive'}
-          </button>
-        </section>
-      {/if}
+        </li>
 
-      {#if savedSpreadsheetId && canUseDrive}
-        <section class="resume-panel">
-          <div>
-            <p class="eyebrow">Welcome back</p>
-            <h2>Continue with your saved grade book</h2>
+        <!-- 2. Connect Drive -->
+        <li class={'step ' + stepState(2)} aria-current={stepState(2) === 'current' ? 'step' : undefined}>
+          <span class="step-mark" aria-hidden="true">{driveReady ? '✓' : '2'}</span>
+          <div class="step-text">
+            <strong>{driveReady ? 'Google Drive connected' : session === 'invalid' ? 'Reconnect Google Drive' : 'Connect Google Drive'}</strong>
+            <span>
+              {#if driveReady}
+                Access is limited to the files you pick.
+              {:else if session === 'invalid' && connection?.lastError === 'admin_policy_enforced'}
+                Your Google Workspace administrator has blocked this app. Ask them to allow it, then reconnect.
+              {:else if session === 'invalid'}
+                Google stopped accepting our access to your Drive. Reconnecting takes one click.
+              {:else}
+                Google will ask permission for files you choose — nothing else in your Drive.
+              {/if}
+            </span>
           </div>
-          <button class="button primary" onclick={() => openGradebook(savedSpreadsheetId)} disabled={loading}>
-            {loading ? 'Opening…' : 'Continue'}
+          <button class="button primary step-action" onclick={startConnectDrive} disabled={loading || stepState(2) !== 'current'}>
+            {driveReady ? 'Connected' : loading && currentStep === 2 ? 'Opening Google…' : session === 'invalid' ? 'Reconnect Drive' : 'Connect Drive'}
           </button>
-        </section>
-        <p class="divider"><span>or set up another grade book</span></p>
-      {/if}
+        </li>
 
-      <section class="setup-grid" aria-label="Set up your grade book">
-        <article class="setup-card">
-          <span class="step-number coral">1</span>
-          <div>
-            <p class="eyebrow">First</p>
-            <h2>Make your copy</h2>
-            <p>The template already has the roster, daily records, week ranges, and grade formulas.</p>
+        <!-- 3. Make a copy -->
+        <li class={'step ' + stepState(3)} aria-current={stepState(3) === 'current' ? 'step' : undefined}>
+          <span class="step-mark" aria-hidden="true">{stepsDone[2] ? '✓' : '3'}</span>
+          <div class="step-text">
+            <strong>{stepsDone[2] ? 'Template copied' : 'Make your copy of the template'}</strong>
+            <span>
+              {#if stepsDone[2]}
+                Your copy is in your Google Drive.
+              {:else}
+                Google Sheets opens in a new tab. Press <em>Make a copy</em>, then come back here.
+                {#if stepState(3) === 'current'}
+                  <button type="button" class="link-button" onclick={copyTemplate}>I already have a copy</button>
+                {/if}
+              {/if}
+            </span>
           </div>
           <a
-            class:disabled={missingTemplateConfig}
-            class="button secondary"
+            class="button primary step-action"
+            class:disabled={stepState(3) !== 'current' || missingTemplateConfig}
             href={templateCopyUrl()}
             target="_blank"
             rel="noreferrer"
-            aria-disabled={missingTemplateConfig}
-            onclick={(event) => missingTemplateConfig && event.preventDefault()}
-          >Make a copy ↗</a>
-        </article>
+            aria-disabled={stepState(3) !== 'current' || missingTemplateConfig}
+            tabindex={stepState(3) === 'current' && !missingTemplateConfig ? 0 : -1}
+            onclick={(event) => {
+              if (stepState(3) !== 'current' || missingTemplateConfig) return event.preventDefault()
+              copyTemplate()
+            }}
+          >{stepsDone[2] ? 'Copied' : 'Make a copy ↗'}</a>
+        </li>
 
-        <div class="process-arrow" aria-hidden="true">→</div>
-
-        <article class="setup-card">
-          <span class="step-number blue">2</span>
-          <div>
-            <p class="eyebrow">Then</p>
-            <h2>Choose your spreadsheet</h2>
-            <p>Choose the copy you just made. We’ll check it and load today’s class.</p>
+        <!-- 4. Pick the copy -->
+        <li class={'step ' + stepState(4)} aria-current={stepState(4) === 'current' ? 'step' : undefined}>
+          <span class="step-mark" aria-hidden="true">{spreadsheet ? '✓' : '4'}</span>
+          <div class="step-text">
+            <strong>{spreadsheet ? 'Spreadsheet chosen' : 'Pick your copy'}</strong>
+            <span>
+              {#if spreadsheet}
+                {spreadsheet.name || 'Your grade book'}
+                <button type="button" class="link-button" onclick={switchSpreadsheet} disabled={loading}>Change</button>
+              {:else}
+                Choose the copy you just made. We’ll check it has the right tabs.
+              {/if}
+            </span>
           </div>
-          <button class="button primary" onclick={chooseGradebook} disabled={loading || !canUseDrive}>
-            {loading ? 'Opening Google…' : 'Choose spreadsheet'}
+          <button class="button primary step-action" onclick={chooseSpreadsheet} disabled={loading || stepState(4) !== 'current'}>
+            {spreadsheet ? 'Chosen' : loading && currentStep === 4 ? 'Opening Google…' : 'Choose spreadsheet'}
           </button>
-        </article>
-      </section>
+        </li>
+
+        <!-- 5. Start grading -->
+        <li class={'step ' + stepState(5)} aria-current={stepState(5) === 'current' ? 'step' : undefined}>
+          <span class="step-mark" aria-hidden="true">5</span>
+          <div class="step-text">
+            <strong>Start grading</strong>
+            <span>Today’s roster, one tap per student. Everything saves straight to your sheet.</span>
+          </div>
+          <button class="button primary step-action" onclick={startGrading} disabled={loading || stepState(5) !== 'current'}>
+            {loading && currentStep === 5 ? 'Loading…' : 'Start grading'}
+          </button>
+        </li>
+      </ol>
 
       <p class="privacy-line">🔒 The app can access only the file you choose. Student data is never sent to an app server.</p>
     </main>

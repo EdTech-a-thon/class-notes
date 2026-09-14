@@ -1,7 +1,7 @@
+import { FAKE_GOOGLE, fakeLoadGradebook, fakeUpdateGrade } from './fake-google'
 import { DIMENSIONS, type Gradebook, type Grades, type Student } from './types'
 
 const API = 'https://sheets.googleapis.com/v4/spreadsheets'
-const LAST_SHEET_KEY = 'participation-tracker.sheet-id'
 const DAY_HEADERS = ['Name', 'Date', ...DIMENSIONS.map((dimension) => dimension.key), 'Total']
 
 interface ValueRange {
@@ -153,6 +153,7 @@ async function appendRows(spreadsheetId: string, token: string, values: unknown[
 }
 
 export async function loadGradebook(spreadsheetId: string, token: string): Promise<Gradebook> {
+  if (FAKE_GOOGLE) return fakeLoadGradebook(spreadsheetId)
   const [metadata, ranges] = await Promise.all([
     googleFetch<SpreadsheetResponse>(
       `${API}/${encodeURIComponent(spreadsheetId)}?fields=properties(title,timeZone)`,
@@ -202,7 +203,6 @@ export async function loadGradebook(spreadsheetId: string, token: string): Promi
     }
   })
 
-  localStorage.setItem(LAST_SHEET_KEY, spreadsheetId)
   return {
     id: spreadsheetId,
     title: metadata.properties?.title || 'Participation Grade Book',
@@ -247,20 +247,13 @@ export function updateGrade(
   dayKey: string,
   token: string,
 ): Promise<number> {
+  if (FAKE_GOOGLE) return fakeUpdateGrade(student)
   if ('locks' in navigator) {
     return navigator.locks.request(`participation-gradebook:${spreadsheetId}`, () =>
       writeGrade(spreadsheetId, student, dayKey, token),
     )
   }
   return writeGrade(spreadsheetId, student, dayKey, token)
-}
-
-export function getLastSpreadsheetId(): string {
-  return localStorage.getItem(LAST_SHEET_KEY) ?? ''
-}
-
-export function forgetLastSpreadsheetId(): void {
-  localStorage.removeItem(LAST_SHEET_KEY)
 }
 
 export function isAuthorizationError(error: unknown): boolean {

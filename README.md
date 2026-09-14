@@ -23,6 +23,25 @@ Fill in `.env.local`:
 
 The Google OAuth client ID, Picker API key, and Cloud project number live on the broker. `appId` and `apiKey` arrive with every minted token, so the client never hardcodes which Google Cloud project backs it.
 
+## Local click-through without Google
+
+`scripts/mock-broker.mjs` stands in for `auth.teacher.dev`, with a pretend Google consent page and a control panel for breaking things. Pair it with `VITE_FAKE_GOOGLE=true` and Picker and the Sheets API are faked too, so the whole onboarding ladder and the grading screen work with no Google account.
+
+```sh
+# .env.local
+VITE_AUTH_BROKER_URL=http://localhost:8787
+VITE_FAKE_GOOGLE=true
+```
+
+```sh
+npm run mock-broker   # http://localhost:8787 — control panel at /
+npm run dev           # http://localhost:5173
+```
+
+The consent page offers Continue, Cancel (`?error=access_denied`), a wrong-account choice (`google_account_mismatch`), and a simulated Google failure. The control panel can mark the grant `invalid_grant` or `admin_policy_enforced`, end sessions, or reset. State is in memory; restart to start over.
+
+Neither the mock nor the fake ships: `VITE_FAKE_GOOGLE` is a build-time constant, and `npm run build` with it unset drops `src/lib/fake-google.ts` from the bundle.
+
 ## How authorization works
 
 1. **Sign in** — `POST /auth/google/start` returns a Google URL; the page navigates there and comes back with an `HttpOnly` session cookie on `.teacher.dev`.
@@ -120,6 +139,8 @@ npm run build
 
 The Google access token is kept in memory only and is discarded on expiry, sign-out, and tab close. The refresh token never reaches the browser. The browser stores only the selected spreadsheet ID in local storage. Student data travels directly between the browser and Google.
 
-**Sign out** clears the broker session but leaves the Drive grant intact, so coming back is one Google click. **Switch grade book** only forgets the saved spreadsheet ID.
+**Sign out** clears the broker session but leaves the Drive grant intact, so coming back is one Google click. **Switch grade book** only forgets the saved spreadsheet.
+
+Setup is a five-step ladder — sign in, connect Drive, copy the template, pick the copy, start grading — and each step unlocks the next. Steps 1–2 come from the broker's connection state; steps 3–4 are remembered per device in local storage (the browser cannot observe the copy being made, so "Make a copy" marks step 3 done when pressed).
 
 Writes are serialized across tabs in the same browser with the Web Locks API. Google Sheets does not offer a cross-device conditional upsert, so this app assumes one teacher is actively grading from one device at a time.

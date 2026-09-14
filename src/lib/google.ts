@@ -1,4 +1,5 @@
 import { mintToken, type DriveToken } from './broker'
+import { FAKE_GOOGLE, fakePickSpreadsheet } from './fake-google'
 import type { PickedSpreadsheet } from './types'
 
 const GAPI_SCRIPT = 'https://apis.google.com/js/api.js'
@@ -76,6 +77,10 @@ async function initializePicker(): Promise<void> {
 }
 
 export async function pickSpreadsheet(): Promise<PickedSpreadsheet | null> {
+  if (FAKE_GOOGLE) {
+    await currentToken()
+    return fakePickSpreadsheet()
+  }
   const [current] = await Promise.all([currentToken(), initializePicker()])
   const picker = window.google?.picker
   if (!picker) throw new Error('Google Picker is unavailable.')
