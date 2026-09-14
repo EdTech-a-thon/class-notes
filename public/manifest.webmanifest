@@ -1,0 +1,13 @@
+{
+  "name": "Participation Grade Book",
+  "short_name": "Participation",
+  "description": "Record daily participation directly in your own Google Sheet.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fc",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

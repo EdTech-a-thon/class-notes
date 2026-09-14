@@ -7,7 +7,12 @@ import { defaultGrades } from './sheets'
 
 export const FAKE_GOOGLE = import.meta.env.VITE_FAKE_GOOGLE === 'true'
 
-const ROSTER = ['Ava Martinez', 'Ben Okafor', 'Chloe Nguyen', 'Diego Rossi', 'Emma Fischer', 'Farah Haddad']
+// Open http://localhost:5173/?emptyRoster to start with no students and click through the
+// add-roster flow. The fake roster lives in memory, so a plain reload brings the six back.
+const EMPTY_ROSTER = new URLSearchParams(window.location.search).has('emptyRoster')
+const ROSTER = EMPTY_ROSTER
+  ? []
+  : ['Ava Martinez', 'Ben Okafor', 'Chloe Nguyen', 'Diego Rossi', 'Emma Fischer', 'Farah Haddad']
 const SHEET: PickedSpreadsheet = { id: 'fake-sheet-id', name: 'Period 3 Participation', url: '#' }
 
 let students: Student[] | null = null
@@ -43,6 +48,20 @@ export async function fakeLoadGradebook(spreadsheetId: string): Promise<Gradeboo
     dayLabel: today.label,
     students: students.map((student) => ({ ...student, grades: { ...student.grades } })),
   }
+}
+
+export async function fakeAddStudents(spreadsheetId: string, names: string[]): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  if (spreadsheetId !== SHEET.id) throw new Error('No such spreadsheet in the fake Drive.')
+  students ??= []
+  names.forEach((name) => {
+    students!.push({
+      name,
+      initials: name.split(' ').map((part) => part[0]).join(''),
+      row: students!.length + 2,
+      grades: defaultGrades(),
+    })
+  })
 }
 
 export async function fakeRenameSpreadsheet(spreadsheetId: string, title: string): Promise<string> {

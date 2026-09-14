@@ -1,4 +1,4 @@
-import { FAKE_GOOGLE, fakeLoadGradebook, fakeRenameSpreadsheet, fakeUpdateGrade } from './fake-google'
+import { FAKE_GOOGLE, fakeAddStudents, fakeLoadGradebook, fakeRenameSpreadsheet, fakeUpdateGrade } from './fake-google'
 import { DIMENSIONS, type Gradebook, type Grades, type Student } from './types'
 
 const API = 'https://sheets.googleapis.com/v4/spreadsheets'
@@ -269,6 +269,35 @@ export async function renameSpreadsheet(spreadsheetId: string, title: string, to
     }),
   })
   return trimmed
+}
+
+/** Turns pasted text into a clean list of names: one per line (or comma-separated on a single
+ *  line), trimmed, with blanks and repeats dropped. Case-insensitive so "ava" and "Ava" are one. */
+export function parseRosterNames(text: string, existing: readonly string[] = []): string[] {
+  let lines = text.split(/\r?\n|\t/)
+  if (lines.filter((line) => line.trim()).length === 1 && lines[0].includes(',')) lines = lines[0].split(',')
+  const seen = new Set(existing.map((name) => name.toLowerCase()))
+  const names: string[] = []
+  for (const line of lines) {
+    const name = line.trim().replace(/\s+/g, ' ')
+    if (!name || seen.has(name.toLowerCase())) continue
+    seen.add(name.toLowerCase())
+    names.push(name)
+  }
+  return names
+}
+
+/** Appends names to the "Class Roster" tab. Initials are left blank so the app derives them. The
+ *  caller reloads the grade book afterwards, which creates today's rows for the new students. */
+export async function addStudents(spreadsheetId: string, names: string[], token: string): Promise<void> {
+  if (!names.length) return
+  if (FAKE_GOOGLE) return fakeAddStudents(spreadsheetId, names)
+  const range = encodeURIComponent("'Class Roster'!A:B")
+  await googleFetch(
+    `${API}/${encodeURIComponent(spreadsheetId)}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    token,
+    { method: 'POST', body: JSON.stringify({ majorDimension: 'ROWS', values: names.map((name) => [name]) }) },
+  )
 }
 
 export function isAuthorizationError(error: unknown): boolean {

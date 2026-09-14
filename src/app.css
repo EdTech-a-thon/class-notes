@@ -497,8 +497,10 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
   place-items: center;
 }
 .empty-state p { margin-bottom: 22px; color: var(--muted); }
+.empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.empty-actions .button { min-height: 52px; padding: 12px 22px; gap: 6px; }
 
-.grade-modal {
+.grade-modal, .roster-modal {
   width: min(960px, calc(100% - 24px));
   max-height: calc(100vh - 24px);
   padding: 0;
@@ -510,8 +512,42 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
   overflow: auto;
 }
 
-.grade-modal::backdrop { background: rgba(34, 43, 64, 0.48); }
-.grade-modal form { padding: 28px; }
+.grade-modal::backdrop, .roster-modal::backdrop { background: rgba(34, 43, 64, 0.48); }
+.grade-modal form, .roster-modal form { padding: 28px; }
+
+/* Bulk roster entry: a big paste box, a live count, and the privacy promise right where the names
+   are typed. */
+.roster-modal { width: min(600px, calc(100% - 24px)); }
+.roster-heading { grid-template-columns: 1fr; }
+.roster-label { margin: 20px 0 8px; color: var(--muted); font-size: 0.88rem; line-height: 1.45; display: block; }
+.roster-textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 14px 16px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+.roster-textarea:focus { border-color: var(--blue); outline: 3px solid rgba(91, 111, 232, 0.28); outline-offset: 2px; }
+.roster-count { margin: 8px 0 0; min-height: 1.4em; color: #30775b; font-size: 0.88rem; font-weight: 700; }
+.privacy-callout {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: #46516a;
+  background: #f3f5f9;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.privacy-callout svg { flex: 0 0 auto; margin-top: 3px; color: var(--green); }
 
 .modal-close {
   width: 44px;
@@ -660,8 +696,8 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 
 @media (max-width: 440px) {
   .brand > span:last-child { display: none; }
-  .grade-modal { width: calc(100% - 12px); max-height: calc(100vh - 12px); border-radius: 16px; }
-  .grade-modal form { padding: 18px; }
+  .grade-modal, .roster-modal { width: calc(100% - 12px); max-height: calc(100vh - 12px); border-radius: 16px; }
+  .grade-modal form, .roster-modal form { padding: 18px; }
   .modal-heading { grid-template-columns: auto 1fr; }
   .modal-score { grid-column: 1 / -1; text-align: left; }
 }

@@ -6,6 +6,7 @@
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
   import CopyPlus from '@lucide/svelte/icons/copy-plus'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
+  import Lock from '@lucide/svelte/icons/lock'
   import LogOut from '@lucide/svelte/icons/log-out'
   import Maximize from '@lucide/svelte/icons/maximize'
   import Minimize from '@lucide/svelte/icons/minimize'
@@ -37,7 +38,15 @@
     rememberSpreadsheet,
     type RememberedSpreadsheet,
   } from './lib/setup'
-  import { isAuthorizationError, loadGradebook, renameSpreadsheet, totalFor, updateGrade } from './lib/sheets'
+  import {
+    addStudents,
+    isAuthorizationError,
+    loadGradebook,
+    parseRosterNames,
+    renameSpreadsheet,
+    totalFor,
+    updateGrade,
+  } from './lib/sheets'
   import { DIMENSIONS, type DimensionKey, type Gradebook, type Grades, type Student } from './lib/types'
 
   type Session = 'checking' | 'signed_out' | 'not_connected' | 'invalid' | 'ready'
@@ -68,6 +77,10 @@
   let justSaved = '' // student name whose card is pulsing after a save
   let justSavedTimer: ReturnType<typeof setTimeout> | undefined
   let modal: HTMLDialogElement
+  let rosterModal: HTMLDialogElement
+  let rosterText = ''
+  let rosterOpen = false
+  let rosterTextarea: HTMLTextAreaElement | undefined
 
   onMount(() => {
     spreadsheet = getRememberedSpreadsheet()
@@ -99,6 +112,7 @@
 
   $: classPoints = gradebook?.students.reduce((sum, student) => sum + totalFor(student.grades), 0) ?? 0
   $: possiblePoints = (gradebook?.students.length ?? 0) * DIMENSIONS.length
+  $: rosterNames = parseRosterNames(rosterText, gradebook?.students.map((student) => student.name) ?? [])
   // Onboarding is a strict ladder: a step is only actionable once every step above it is done.
   $: signedIn = session !== 'checking' && session !== 'signed_out'
   $: driveReady = session === 'ready'
@@ -275,6 +289,35 @@
       renaming = false
     } catch (caught) {
       handleFailure(caught)
+    } finally {
+      saving = false
+    }
+  }
+
+  async function openRosterEditor() {
+    rosterText = ''
+    resetMessages()
+    rosterOpen = true
+    rosterModal.showModal()
+    await tick()
+    rosterTextarea?.focus()
+  }
+
+  // Names are appended to the "Class Roster" tab, then the grade book is reloaded so today's rows
+  // exist for everyone. The text stays in the box if the write fails, so nothing has to be retyped.
+  async function saveRoster() {
+    if (!gradebook || !rosterNames.length) return
+    saving = true
+    resetMessages()
+    const id = gradebook.id
+    try {
+      const token = await authorize()
+      await addStudents(id, rosterNames, token)
+      gradebook = await loadGradebook(id, token)
+      rosterModal.close()
+    } catch (caught) {
+      handleFailure(caught)
+      if (!gradebook) rosterModal.close()
     } finally {
       saving = false
     }
@@ -552,12 +595,17 @@
         <section class="empty-state">
           <div class="empty-icon" aria-hidden="true">👋</div>
           <h2>No students on the roster yet</h2>
-          <p>Add names to the “Class Roster” tab, then refresh this page.</p>
-          <a class="button primary" href={sheetUrl(gradebook.id)} target="_blank" rel="noreferrer">Open class roster</a>
+          <p>Paste your class list once and you’re ready to grade.</p>
+          <div class="empty-actions">
+            <button class="button primary" onclick={openRosterEditor} disabled={loading}>Add your roster</button>
+            <a class="button secondary" href={sheetUrl(gradebook.id)} target="_blank" rel="noreferrer">
+              <span>Edit in Google Sheets</span><ArrowUpRight size={16} aria-hidden="true" />
+            </a>
+          </div>
         </section>
       {/if}
     </main>
-    {#if error && !selectedStudent}
+    {#if error && !selectedStudent && !rosterOpen}
       <div class="toast" role="alert">
         <span class="toast-icon" aria-hidden="true">!</span>
         <span class="toast-text">{error}</span>
@@ -697,6 +745,59 @@
     </main>
   {/if}
 </div>
+
+<dialog
+  bind:this={rosterModal}
+  class="roster-modal"
+  onclose={() => (rosterOpen = false)}
+  onclick={(event) => event.target === event.currentTarget && !saving && rosterModal.close()}
+>
+  <form method="dialog">
+    <button class="modal-close" value="cancel" aria-label="Close" disabled={saving}><X size={22} aria-hidden="true" /></button>
+
+    <header class="modal-heading roster-heading">
+      <div>
+        <p class="eyebrow">Class roster</p>
+        <h2>Add your students</h2>
+      </div>
+    </header>
+
+    <label class="roster-label" for="roster-names">One name per line. Paste straight from a class list or spreadsheet column.</label>
+    <textarea
+      id="roster-names"
+      bind:this={rosterTextarea}
+      bind:value={rosterText}
+      class="roster-textarea"
+      rows="10"
+      placeholder={'Ava Martinez\nBen Okafor\nChloe Nguyen'}
+      disabled={saving}
+      autocomplete="off"
+      autocapitalize="words"
+      spellcheck="false"
+    ></textarea>
+    <p class="roster-count" aria-live="polite">
+      {#if rosterNames.length}
+        {rosterNames.length} {rosterNames.length === 1 ? 'student' : 'students'} will be added
+      {:else}
+        &nbsp;
+      {/if}
+    </p>
+
+    <p class="privacy-callout">
+      <Lock size={16} aria-hidden="true" />
+      <span>No student data ever leaves your Google Drive or this device. Names are written straight to your own sheet.</span>
+    </p>
+
+    {#if error}<p class="modal-error" role="alert">{error}</p>{/if}
+
+    <footer class="modal-actions">
+      <button class="button secondary" value="cancel" disabled={saving}>Cancel</button>
+      <button class="button primary" type="button" onclick={saveRoster} disabled={saving || !rosterNames.length}>
+        {saving ? 'Adding…' : rosterNames.length ? `Add ${rosterNames.length} ${rosterNames.length === 1 ? 'student' : 'students'}` : 'Add students'}
+      </button>
+    </footer>
+  </form>
+</dialog>
 
 <dialog
   bind:this={modal}

@@ -38,6 +38,8 @@ npm run mock-broker   # http://localhost:8787 — control panel at /
 npm run dev           # http://localhost:5173
 ```
 
+Open `http://localhost:5173/?emptyRoster` to start with no students and click through the add-roster flow.
+
 The consent page offers Continue, Cancel (`?error=access_denied`), a wrong-account choice (`google_account_mismatch`), and a simulated Google failure. The control panel can mark the grant `invalid_grant` or `admin_policy_enforced`, end sessions, or reset. State is in memory; restart to start over.
 
 Neither the mock nor the fake ships: `VITE_FAKE_GOOGLE` is a build-time constant, and `npm run build` with it unset drops `src/lib/fake-google.ts` from the bundle.
