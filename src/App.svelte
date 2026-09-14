@@ -334,7 +334,6 @@
   {:else}
     <main class="setup-view">
       <section class="setup-intro">
-        <div class="setup-icon" aria-hidden="true">✓</div>
         <h1>Set up your grade book</h1>
         <p>Five quick steps. Each one unlocks the next.</p>
       </section>
@@ -385,7 +384,7 @@
               {:else if session === 'invalid'}
                 Google stopped accepting our access to your Drive. Reconnecting takes one click.
               {:else}
-                Google will ask permission for files you choose — nothing else in your Drive.
+                Google asks permission for files you pick — nothing else in your Drive.
               {/if}
             </span>
           </div>
@@ -403,7 +402,7 @@
               {#if stepsDone[2]}
                 Your copy is in your Google Drive.
               {:else}
-                Google Sheets opens in a new tab. Press <em>Make a copy</em>, then come back here.
+                Press <em>Make a copy</em> in the tab that opens, then come back.
                 {#if stepState(3) === 'current'}
                   <button type="button" class="link-button" onclick={copyTemplate}>I already have a copy</button>
                 {/if}
@@ -435,7 +434,7 @@
                 {spreadsheet.name || 'Your grade book'}
                 <button type="button" class="link-button" onclick={switchSpreadsheet} disabled={loading}>Change</button>
               {:else}
-                Choose the copy you just made. We’ll check it has the right tabs.
+                We’ll check the copy has the right tabs.
               {/if}
             </span>
           </div>
@@ -449,7 +448,7 @@
           <span class="step-mark" aria-hidden="true">5</span>
           <div class="step-text">
             <strong>Start grading</strong>
-            <span>Today’s roster, one tap per student. Everything saves straight to your sheet.</span>
+            <span>Today’s roster, one tap per student, saved straight to your sheet.</span>
           </div>
           <button class="button primary step-action" onclick={startGrading} disabled={loading || stepState(5) !== 'current'}>
             {loading && currentStep === 5 ? 'Loading…' : 'Start grading'}
