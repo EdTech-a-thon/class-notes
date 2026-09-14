@@ -626,7 +626,6 @@
     <main class="setup-view">
       <section class="setup-intro">
         <h1>Set up your grade book</h1>
-        <p>Five quick steps. Each one unlocks the next.</p>
       </section>
 
       {#if error}
