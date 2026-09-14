@@ -539,3 +539,65 @@ button:disabled, .disabled { cursor: not-allowed; opacity: 0.5; }
 
 .opening-view { display: flex; align-items: center; justify-content: center; min-height: 40vh; }
 .opening-note { color: var(--muted); font-size: 1rem; font-weight: 600; }
+
+/* Save confirmation happens on the card itself rather than in a banner. */
+.student-card.just-saved { border-color: var(--green); }
+.student-card.just-saved .score { animation: saved-pulse 1.4s ease-out; }
+@keyframes saved-pulse {
+  0% { color: var(--green); transform: scale(1.35); }
+  40% { color: var(--green); transform: scale(1); }
+  100% { transform: scale(1); }
+}
+
+/* Errors on the roster: one bottom-center snackbar, thumb-reachable in either orientation. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(560px, calc(100% - 32px));
+  padding: 14px 14px 14px 16px;
+  border-radius: 14px;
+  color: white;
+  background: #2b3448;
+  box-shadow: 0 16px 40px rgba(34, 43, 64, 0.32);
+  transform: translateX(-50%);
+  animation: toast-in 0.22s ease-out;
+}
+.toast-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--coral);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.toast-text { flex: 1 1 auto; font-size: 0.93rem; line-height: 1.45; }
+.toast-dismiss {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  margin: -8px -4px -8px 0;
+  border: 0;
+  border-radius: 10px;
+  color: #c3c9d8;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast-dismiss:hover { color: white; background: rgba(255, 255, 255, 0.1); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast, .student-card.just-saved .score { animation: none; }
+}

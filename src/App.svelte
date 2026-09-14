@@ -42,6 +42,8 @@
   let saving = false
   let notice = ''
   let error = ''
+  let justSaved = '' // student name whose card is pulsing after a save
+  let justSavedTimer: ReturnType<typeof setTimeout> | undefined
   let modal: HTMLDialogElement
 
   onMount(() => {
@@ -190,6 +192,12 @@
     if (spreadsheet) return openGradebook(spreadsheet.id)
   }
 
+  function flashSaved(name: string) {
+    clearTimeout(justSavedTimer)
+    justSaved = name
+    justSavedTimer = setTimeout(() => (justSaved = ''), 1400)
+  }
+
   function editStudent(student: Student) {
     selectedStudent = student
     draftGrades = { ...student.grades }
@@ -217,8 +225,8 @@
           student.name === original.name ? updated : student,
         ),
       }
-      notice = updated.name + ' saved at ' + totalFor(updated.grades) + '/5.'
       modal.close()
+      flashSaved(updated.name)
     } catch (caught) {
       handleFailure(caught)
       if (!gradebook) modal.close()
@@ -287,17 +295,10 @@
         </div>
       </section>
 
-      {#if error}
-        <div class="banner error-banner" role="alert"><span>!</span>{error}</div>
-      {/if}
-      {#if notice}
-        <div class="banner success-banner" role="status"><span>✓</span>{notice}</div>
-      {/if}
-
       {#if gradebook.students.length}
         <section class="student-grid" aria-label="Student participation">
           {#each gradebook.students as student, index (student.name)}
-            <button class="student-card" title={student.name} onclick={() => editStudent(student)}>
+            <button class="student-card" class:just-saved={justSaved === student.name} title={student.name} onclick={() => editStudent(student)}>
               <span class={'initials color-' + ((index % 5) + 1)}>{student.initials}</span>
               <span class="student-details">
                 <span class="student-name">{student.name}</span>
@@ -325,6 +326,13 @@
         </section>
       {/if}
     </main>
+    {#if error && !selectedStudent}
+      <div class="toast" role="alert">
+        <span class="toast-icon" aria-hidden="true">!</span>
+        <span class="toast-text">{error}</span>
+        <button class="toast-dismiss" onclick={() => (error = '')} aria-label="Dismiss">×</button>
+      </div>
+    {/if}
   {:else if autoOpening}
     <main class="setup-view opening-view" aria-busy="true">
       <p class="opening-note">Opening your grade book…</p>
