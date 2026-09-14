@@ -69,10 +69,6 @@ export function clearAuthorization(): void {
   token = null
 }
 
-export function getActiveToken(): string | null {
-  return isFresh(token) ? token.accessToken : null
-}
-
 async function initializePicker(): Promise<void> {
   await loadScript(GAPI_SCRIPT, 'google-api-loader')
   if (!window.gapi) throw new Error('Google Picker did not finish loading.')

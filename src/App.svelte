@@ -26,7 +26,6 @@
     updateGrade,
   } from './lib/sheets'
   import { DIMENSIONS, type DimensionKey, type Gradebook, type Grades, type Student } from './lib/types'
-  import { registerParticipationTool, type ParticipationToolInput } from './lib/webmcp'
 
   type Session = 'checking' | 'signed_out' | 'not_connected' | 'invalid' | 'ready'
 
@@ -48,7 +47,6 @@
     if (arrival === 'access_denied') notice = describeArrivalError(arrival)
     else if (arrival) error = describeArrivalError(arrival)
     void refreshSession()
-    return registerParticipationTool(setStudentGradeFromTool)
   })
 
   $: classPoints = gradebook?.students.reduce((sum, student) => sum + totalFor(student.grades), 0) ?? 0
@@ -198,34 +196,6 @@
     } finally {
       saving = false
     }
-  }
-
-  async function setStudentGradeFromTool(input: ParticipationToolInput) {
-    if (!gradebook) throw new Error('Open a grade book before setting participation.')
-    const student = gradebook.students.find(
-      (entry) => entry.name.toLocaleLowerCase() === input.student.trim().toLocaleLowerCase(),
-    )
-    if (!student) throw new Error('No rostered student named “' + input.student + '” was found.')
-
-    const updated: Student = {
-      ...student,
-      grades: {
-        'Timely-ness': input.timely,
-        'Prepared-ness': input.prepared,
-        'Attentive-ness': input.attentive,
-        'Contribution-ness': input.contribution,
-        'Collaboration-ness': input.collaboration,
-      },
-    }
-    const token = await authorize()
-    updated.row = await updateGrade(gradebook.id, updated, gradebook.dayKey, token)
-    gradebook = {
-      ...gradebook,
-      students: gradebook.students.map((entry) => (entry.name === student.name ? updated : entry)),
-    }
-    const total = totalFor(updated.grades)
-    notice = updated.name + ' saved at ' + total + '/5.'
-    return { student: updated.name, total, outOf: 5, day: gradebook.dayKey }
   }
 
   function switchGradebook() {
