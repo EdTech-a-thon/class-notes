@@ -10,6 +10,9 @@
 
 import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const PORT = Number(process.env.MOCK_BROKER_PORT ?? 8787)
 const APP_ORIGIN = process.env.MOCK_APP_ORIGIN ?? 'http://localhost:5173'
@@ -17,12 +20,32 @@ const EMAIL = 'teacher@example.org'
 const OTHER_EMAIL = 'someone-else@example.org'
 const DRIVE_FILE = 'https://www.googleapis.com/auth/drive.file'
 const COOKIE = 'mock_broker_session'
+// Sessions and the grant survive restarts so a signed-in browser stays signed in across `npm run
+// mock-broker` runs. Gitignored; delete it (or use Reset) to start over.
+const STATE_FILE = join(dirname(fileURLToPath(import.meta.url)), 'mock-broker-state.json')
 
 const state = {
   sessions: new Set(),
   grant: null, // null | { status: 'active' | 'invalid', lastError: string }
   mints: 0,
 }
+
+function load() {
+  if (!existsSync(STATE_FILE)) return
+  try {
+    const saved = JSON.parse(readFileSync(STATE_FILE, 'utf8'))
+    state.sessions = new Set(saved.sessions ?? [])
+    state.grant = saved.grant ?? null
+    state.mints = saved.mints ?? 0
+  } catch {
+    // A corrupt file just means a fresh start.
+  }
+}
+
+function save() {
+  writeFileSync(STATE_FILE, JSON.stringify({ sessions: [...state.sessions], grant: state.grant, mints: state.mints }, null, 2))
+}
+load()
 
 function log(...parts) {
   console.log(new Date().toISOString().slice(11, 19), ...parts)
@@ -126,6 +149,7 @@ async function api(req, res, url) {
 
   if (route === 'POST /auth/logout') {
     state.sessions.delete(cookieValue(req))
+    save()
     res.writeHead(204, { ...cors, 'Set-Cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax` })
     return res.end()
   }
@@ -142,6 +166,7 @@ async function api(req, res, url) {
 
   if (route === 'DELETE /oauth/google/connection') {
     state.grant = null
+    save()
     res.writeHead(204, cors)
     return res.end()
   }
@@ -150,6 +175,7 @@ async function api(req, res, url) {
     if (!state.grant) return reply(404, { error: 'not_connected' })
     if (state.grant.status === 'invalid') return reply(409, { error: state.grant.lastError })
     if (++state.mints > 60) return reply(429, { error: 'rate_limited' })
+    save()
     return reply(200, {
       accessToken: 'mock-access-token-' + randomBytes(6).toString('hex'),
       expiresAt: new Date(Date.now() + 3600_000).toISOString(),
@@ -198,12 +224,14 @@ function consent(req, res, url) {
   if (flow === 'signin') {
     const token = randomBytes(16).toString('hex')
     state.sessions.add(token)
+    save()
     return redirect(res, back(), { 'Set-Cookie': `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax` })
   }
 
   if (!signedIn(req)) return redirect(res, back('unauthorized'))
   if (choice === 'mismatch') return redirect(res, back('google_account_mismatch'))
   state.grant = { status: 'active', lastError: '' }
+  save()
   return redirect(res, back())
 }
 
@@ -216,7 +244,7 @@ function control(req, res, url) {
   if (action === 'restore') state.grant = state.grant && { status: 'active', lastError: '' }
   if (action === 'signout') state.sessions.clear()
   if (action === 'reset') { state.sessions.clear(); state.grant = null; state.mints = 0 }
-  if (action) { log('control:', action); return redirect(res, '/') }
+  if (action) { log('control:', action); save(); return redirect(res, '/') }
 
   const grant = state.grant ? `${state.grant.status}${state.grant.lastError ? ` (${state.grant.lastError})` : ''}` : 'not connected'
   return html(res, `
@@ -246,4 +274,5 @@ createServer((req, res) => {
   console.log(`Mock auth broker listening on http://localhost:${PORT}`)
   console.log(`  control panel: http://localhost:${PORT}/`)
   console.log(`  set VITE_AUTH_BROKER_URL=http://localhost:${PORT} in .env.local`)
+  console.log(`  state persists in ${STATE_FILE} (${state.sessions.size} session(s), grant: ${state.grant?.status ?? 'none'})`)
 })
