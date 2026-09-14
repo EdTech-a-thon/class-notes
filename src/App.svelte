@@ -34,6 +34,7 @@
   let connection: DriveConnection | null = null
   let gradebook: Gradebook | null = null
   let autoOpening = false // a returning teacher goes straight to the roster, no step list
+  let pendingGradebook: Gradebook | null = null // loaded at pick time on the first run, shown by step 5
   let spreadsheet: RememberedSpreadsheet | null = null
   let templateCopied = false
   let selectedStudent: Student | null = null
@@ -103,6 +104,7 @@
       if (caught.signedOut || caught.needsConnection) {
         clearAuthorization()
         gradebook = null
+        pendingGradebook = null
       }
     } else if (isAuthorizationError(caught)) {
       clearAuthorization()
@@ -142,6 +144,7 @@
     } finally {
       clearAuthorization()
       gradebook = null
+      pendingGradebook = null
       selectedStudent = null
       connection = null
       session = 'signed_out'
@@ -173,13 +176,13 @@
     try {
       const picked = await pickSpreadsheet()
       if (!picked) return
-      // Check the tabs now so a wrong file is caught on this step, then go straight to grading.
+      // Check the tabs now so a wrong file is caught on this step. The roster waits behind step 5
+      // on this first run; every later visit skips the list and opens it directly.
       const token = await authorize()
-      const loaded = await loadGradebook(picked.id, token)
-      spreadsheet = { id: picked.id, name: loaded.title || picked.name }
+      pendingGradebook = await loadGradebook(picked.id, token)
+      spreadsheet = { id: picked.id, name: pendingGradebook.title || picked.name }
       rememberSpreadsheet(spreadsheet)
       templateCopied = true
-      gradebook = loaded
     } catch (caught) {
       handleFailure(caught)
     } finally {
@@ -187,9 +190,16 @@
     }
   }
 
-  // Only reached when an automatic open failed (network, revoked file); acts as the retry.
   function startGrading() {
-    if (spreadsheet) return openGradebook(spreadsheet.id)
+    if (!spreadsheet) return
+    if (pendingGradebook) {
+      resetMessages()
+      gradebook = pendingGradebook
+      pendingGradebook = null
+      return
+    }
+    // No preloaded roster means an automatic open failed earlier; this is the retry.
+    return openGradebook(spreadsheet.id)
   }
 
   function flashSaved(name: string) {
@@ -238,6 +248,7 @@
   function switchSpreadsheet() {
     forgetSpreadsheet()
     spreadsheet = null
+    pendingGradebook = null
     gradebook = null
     selectedStudent = null
     resetMessages()
