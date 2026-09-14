@@ -118,8 +118,11 @@ export async function pickSpreadsheet(): Promise<PickedSpreadsheet | null> {
   })
 }
 
-export function templateCopyUrl(): string {
-  return googleConfig.templateId
-    ? `https://docs.google.com/spreadsheets/d/${encodeURIComponent(googleConfig.templateId)}/copy`
-    : '#'
+// `authuser` pins the copy page to the connected Google account, so a browser whose default
+// profile is a different account does not drop the copy into the wrong Drive.
+export function templateCopyUrl(email?: string): string {
+  if (!googleConfig.templateId) return '#'
+  const url = new URL(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(googleConfig.templateId)}/copy`)
+  if (email) url.searchParams.set('authuser', email)
+  return url.toString()
 }

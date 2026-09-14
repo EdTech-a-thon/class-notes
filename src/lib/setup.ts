@@ -63,3 +63,8 @@ export function hasCopiedTemplate(): boolean {
 export function markTemplateCopied(): void {
   write(TEMPLATE_COPIED_KEY, 'true')
 }
+
+/** Signing out wipes what this device remembers, so the next teacher starts at step 1. */
+export function forgetEverything(): void {
+  for (const key of [SHEET_ID_KEY, SHEET_NAME_KEY, RECENT_SHEETS_KEY, TEMPLATE_COPIED_KEY]) write(key, null)
+}

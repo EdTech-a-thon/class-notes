@@ -35,6 +35,7 @@
     getRememberedSpreadsheet,
     hasCopiedTemplate,
     markTemplateCopied,
+    forgetEverything,
     rememberSpreadsheet,
     type RememberedSpreadsheet,
   } from './lib/setup'
@@ -197,9 +198,14 @@
       showError(caught)
     } finally {
       clearAuthorization()
+      forgetEverything()
       gradebook = null
       pendingGradebook = null
       selectedStudent = null
+      spreadsheet = null
+      recent = []
+      templateCopied = false
+      autoOpening = false
       connection = null
       session = 'signed_out'
       loading = false
@@ -486,7 +492,7 @@
                 class="menu-item"
                 class:disabled={missingTemplateConfig}
                 role="menuitem"
-                href={templateCopyUrl()}
+                href={templateCopyUrl(connection?.googleEmail)}
                 target="_blank"
                 rel="noreferrer"
                 aria-disabled={missingTemplateConfig}
@@ -697,7 +703,7 @@
           <a
             class="button primary step-action"
             class:disabled={stepState(3) !== 'current' || missingTemplateConfig}
-            href={templateCopyUrl()}
+            href={templateCopyUrl(connection?.googleEmail)}
             target="_blank"
             rel="noreferrer"
             aria-disabled={stepState(3) !== 'current' || missingTemplateConfig}
