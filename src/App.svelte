@@ -12,16 +12,16 @@
   import X from '@lucide/svelte/icons/x'
   import { studentsWithDrafts } from './lib/drafts'
   import {
-    addNotes, addStudents, addSubject, createNotebook, deleteNote, deleteNotebook, deleteSubject,
-    getCurrentNotebookId, listNotebooks, loadNotebook, parseRosterNames, setCurrentNotebook, updateNote, updateSubject,
+    addNotes, addStudents, addCategory, createNotebook, deleteNote, deleteNotebook, deleteCategory,
+    getCurrentNotebookId, listNotebooks, loadNotebook, parseRosterNames, setCurrentNotebook, updateNote, updateCategory,
   } from './lib/notebook'
   import { today } from './lib/time'
-  import type { Note, NoteDraft, Notebook, NotebookSummary, Subject } from './lib/types'
+  import type { Note, NoteDraft, Notebook, NotebookSummary, Category } from './lib/types'
   import NoteEditor from './NoteEditor.svelte'
   import NotesView from './NotesView.svelte'
-  import SubjectsView from './SubjectsView.svelte'
+  import CategoriesView from './CategoriesView.svelte'
 
-  type View = 'today' | 'notes' | 'subjects'
+  type View = 'today' | 'notes' | 'categories'
 
   let notebook: Notebook | null = null
   let classes: NotebookSummary[] = []
@@ -135,9 +135,9 @@
   }
   const saveNoteEdit = (note: Note) => !!notebook && commit(() => updateNote(notebook!, note))
   const removeNote = (note: Note) => !!notebook && commit(() => deleteNote(notebook!, note.id))
-  const createSubject = (subject: Omit<Subject, 'id'>) => !!notebook && commit(() => addSubject(notebook!, subject))
-  const saveSubject = (subject: Subject) => !!notebook && commit(() => updateSubject(notebook!, subject))
-  const removeSubject = (subject: Subject) => !!notebook && commit(() => deleteSubject(notebook!, subject.id))
+  const createCategory = (category: Omit<Category, 'id'>) => !!notebook && commit(() => addCategory(notebook!, category))
+  const saveCategory = (category: Category) => !!notebook && commit(() => updateCategory(notebook!, category))
+  const removeCategory = (category: Category) => !!notebook && commit(() => deleteCategory(notebook!, category.id))
 
   function toggleSwitcher() { if (!switcherOpen) classes = listNotebooks(); switcherOpen = !switcherOpen }
   function closeSwitcherOnOutsideClick(event: PointerEvent) { if (switcherOpen && switcher && !switcher.contains(event.target as Node)) switcherOpen = false }
@@ -145,7 +145,7 @@
 </script>
 
 <svelte:window onpointerdown={closeSwitcherOnOutsideClick} onkeydown={closeSwitcherOnEscape} />
-<svelte:head><title>Observations</title><meta name="description" content="Quick classroom observations, organized by student and subject." /></svelte:head>
+<svelte:head><title>Observations</title><meta name="description" content="Quick classroom observations, organized by student and category." /></svelte:head>
 
 <div class="app-shell">
   <header class="topbar">
@@ -170,9 +170,9 @@
   {#if notebook && !creating}
     <main class="notebook-view">
       {#if view === 'notes'}
-        <NotesView notes={notebook.notes} students={notebook.students} subjects={notebook.subjects} onedit={editNote} />
-      {:else if view === 'subjects'}
-        <SubjectsView subjects={notebook.subjects} onadd={createSubject} onupdate={saveSubject} ondelete={removeSubject} />
+        <NotesView notes={notebook.notes} students={notebook.students} categories={notebook.categories} onedit={editNote} />
+      {:else if view === 'categories'}
+        <CategoriesView categories={notebook.categories} onadd={createCategory} onupdate={saveCategory} ondelete={removeCategory} />
       {:else}
         <section class="today-hero">
           <div><p class="eyebrow">{day.label}</p><h1>{notebook.title}</h1></div>
@@ -199,7 +199,7 @@
     <nav class="bottom-nav" aria-label="Main views">
       <button aria-current={view === 'today' ? 'page' : undefined} onclick={() => (view = 'today')}><Users size={23} /><span>Today</span></button>
       <button aria-current={view === 'notes' ? 'page' : undefined} onclick={() => (view = 'notes')}><BookOpen size={23} /><span>All notes</span></button>
-      <button aria-current={view === 'subjects' ? 'page' : undefined} onclick={() => (view = 'subjects')}><Settings2 size={23} /><span>Subjects</span></button>
+      <button aria-current={view === 'categories' ? 'page' : undefined} onclick={() => (view = 'categories')}><Settings2 size={23} /><span>Categories</span></button>
     </nav>
     {#if error && !noteOpen}<div class="toast" role="alert"><span class="toast-icon">!</span><span class="toast-text">{error}</span><button class="toast-dismiss" onclick={() => (error = '')} aria-label="Dismiss">×</button></div>{/if}
   {:else}
@@ -220,7 +220,7 @@
 </div>
 
 {#if notebook && !creating}
-  <NoteEditor bind:this={noteEditor} notebookId={notebook.id} subjects={notebook.subjects} {error} onsave={saveNotes} onupdate={saveNoteEdit} ondelete={removeNote} ondraftchange={updateDraftStudent} onopenchange={(open) => (noteOpen = open)} />
+  <NoteEditor bind:this={noteEditor} notebookId={notebook.id} categories={notebook.categories} {error} onsave={saveNotes} onupdate={saveNoteEdit} ondelete={removeNote} ondraftchange={updateDraftStudent} onopenchange={(open) => (noteOpen = open)} />
 {/if}
 
 <dialog bind:this={rosterModal} class="roster-modal" onclick={(event) => event.target === event.currentTarget && rosterModal.close()}>

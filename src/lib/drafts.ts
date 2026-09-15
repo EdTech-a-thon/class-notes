@@ -1,7 +1,7 @@
 // Unfinished notes, one per student per class, so closing the editor never loses text.
 
 export interface SavedNoteDraft {
-  subject: string
+  category: string
   text: string
   timestamp: string
 }
@@ -17,7 +17,7 @@ export function readDraft(notebookId: string, student: string): SavedNoteDraft |
     const parsed = JSON.parse(localStorage.getItem(key(notebookId, student)) ?? 'null')
     if (!parsed || typeof parsed !== 'object') return null
     return {
-      subject: typeof parsed.subject === 'string' ? parsed.subject : '',
+      category: typeof parsed.category === 'string' ? parsed.category : typeof parsed.subject === 'string' ? parsed.subject : '',
       text: typeof parsed.text === 'string' ? parsed.text : '',
       timestamp: typeof parsed.timestamp === 'string' ? parsed.timestamp : '',
     }
@@ -58,6 +58,6 @@ export function removeDraftsFor(notebookId: string): void {
 export function studentsWithDrafts(notebookId: string, students: readonly string[]): Set<string> {
   return new Set(students.filter((student) => {
     const draft = readDraft(notebookId, student)
-    return !!draft && (!!draft.subject || !!draft.text.trim())
+    return !!draft && (!!draft.category || !!draft.text.trim())
   }))
 }

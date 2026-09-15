@@ -1,14 +1,14 @@
 # Observations
 
-A small classroom observation notebook for early-years teachers. Tap one student, choose a subject or topic, and write down what happened. Notes are timestamped automatically and kept entirely on the teacher's device: there is no account, no server, and nothing leaves the browser.
+A small classroom observation notebook for early-years teachers. Tap one student, choose a category, and write down what happened. Notes are timestamped automatically and kept entirely on the teacher's device: there is no account, no server, and nothing leaves the browser.
 
 The app has three screens:
 
 - **Today** shows the class list and who already has a note today. Tapping a student opens a note locked to that student.
-- **All notes** filters by student, subject, or search term and groups a student's notes by subject for report-card writing.
-- **Subjects** adds, renames, or removes the topics available in the note editor. Removing a topic does not rewrite historical notes.
+- **All notes** filters by student, category, or search term and groups a student's notes by category for report-card writing.
+- **Categories** adds, renames, or removes the categories available in the note editor. Removing a category does not rewrite historical notes.
 
-Each note belongs to exactly one student and records a date and time, student, subject, and text. The current date and time are selected automatically but can be changed before saving.
+Each note belongs to exactly one student and records a date and time, student, category, and text. The current date and time are selected automatically but can be changed before saving.
 
 Unfinished notes are saved per student. Closing the composer keeps the draft, the student's card shows **Draft waiting**, and opening that student again restores it. **Clear** explicitly discards it; saving the note removes the draft.
 
@@ -22,7 +22,7 @@ Everything lives in the browser's `localStorage` under `observations-local.*`:
 
 - `notebooks`: the list of classes (id and title).
 - `current`: the class that opens on launch.
-- `notebook:<id>`: one class, with its students, subjects, and notes.
+- `notebook:<id>`: one class, with its students, categories, and notes.
 - `draft:<id>:<student>`: an unfinished note.
 
 Clearing site data for the app's origin removes every class and note, so this is a single-device notebook.

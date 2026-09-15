@@ -8,7 +8,7 @@
 var TEMPLATE_TITLE = 'Observation Notebook Template';
 var TEMPLATE_TIME_ZONE = 'America/New_York';
 
-var DEFAULT_SUBJECTS = [
+var DEFAULT_CATEGORIES = [
   ['Literacy', '📖'],
   ['Math', '🔢'],
   ['Science & Inquiry', '🔎'],
@@ -33,15 +33,15 @@ function createObservationTemplate() {
 
   var roster = ss.getSheets()[0];
   roster.setName('Class Roster');
-  var subjects = ss.insertSheet('Subjects');
+  var categories = ss.insertSheet('Categories');
   var notes = ss.insertSheet('Notes');
 
   buildRoster_(roster);
-  buildSubjects_(subjects);
+  buildCategories_(categories);
   buildNotes_(notes);
 
   roster.setTabColor(COLORS.yellow);
-  subjects.setTabColor(COLORS.blue);
+  categories.setTabColor(COLORS.blue);
   notes.setTabColor(COLORS.navy);
   ss.setActiveSheet(roster);
   SpreadsheetApp.flush();
@@ -61,11 +61,11 @@ function buildRoster_(sheet) {
   sheet.getRange('A2:B1000').setNumberFormat('@');
 }
 
-function buildSubjects_(sheet) {
-  prepareSheet_(sheet, ['Subject', 'Emoji'], COLORS.blue, COLORS.white);
-  sheet.getRange('A1').setNote('The app shows these choices when you write a note. You can also manage them in the Subjects screen.');
+function buildCategories_(sheet) {
+  prepareSheet_(sheet, ['Category', 'Emoji'], COLORS.blue, COLORS.white);
+  sheet.getRange('A1').setNote('The app shows these choices when you write a note. You can also manage them in the Categories screen.');
   sheet.getRange('B1').setNote('Optional.');
-  sheet.getRange(2, 1, DEFAULT_SUBJECTS.length, 2).setValues(DEFAULT_SUBJECTS);
+  sheet.getRange(2, 1, DEFAULT_CATEGORIES.length, 2).setValues(DEFAULT_CATEGORIES);
   sheet.setColumnWidth(1, 250);
   sheet.setColumnWidth(2, 90);
   sheet.getRange('A2:B1000').setNumberFormat('@');
@@ -73,10 +73,10 @@ function buildSubjects_(sheet) {
 }
 
 function buildNotes_(sheet) {
-  prepareSheet_(sheet, ['Date & time', 'Student', 'Subject', 'Note'], COLORS.navy, COLORS.white);
+  prepareSheet_(sheet, ['Date & time', 'Student', 'Category', 'Note'], COLORS.navy, COLORS.white);
   sheet.getRange('A1').setNote('Recorded automatically by the app, including the time.');
   sheet.getRange('B1').setNote('Matches a name in Class Roster.');
-  sheet.getRange('C1').setNote('Matches a choice in Subjects when the note was written.');
+  sheet.getRange('C1').setNote('Matches a choice in Categories when the note was written.');
   sheet.getRange('D1').setNote('The classroom observation.');
   sheet.getRange('A2:A1000').setNumberFormat('@');
   sheet.getRange('D2:D1000').setWrap(true);

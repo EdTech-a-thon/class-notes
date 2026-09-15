@@ -2,7 +2,7 @@
 // account: one entry per class, an index of classes, and which class is open.
 
 import { removeDraftsFor } from './drafts'
-import { DEFAULT_SUBJECTS, type Note, type NoteDraft, type Notebook, type NotebookSummary, type Student, type Subject } from './types'
+import { DEFAULT_CATEGORIES, type Note, type NoteDraft, type Notebook, type NotebookSummary, type Student, type Category } from './types'
 
 const INDEX_KEY = 'observations-local.notebooks'
 const CURRENT_KEY = 'observations-local.current'
@@ -81,18 +81,19 @@ export function loadNotebook(id: string): Notebook | null {
       .map((entry: any) => ({ id: num(entry?.id), name: str(entry?.name).trim(), initials: str(entry?.initials).trim() }))
       .filter((student: Student) => student.name)
       .map((student: Student) => ({ ...student, initials: student.initials || deriveInitials(student.name) }))
-    const subjects: Subject[] = (Array.isArray(parsed.subjects) ? parsed.subjects : [])
+    // Older notebooks stored these under `subjects`; keep their existing choices.
+    const categories: Category[] = (Array.isArray(parsed.categories) ? parsed.categories : Array.isArray(parsed.subjects) ? parsed.subjects : [])
       .map((entry: any) => ({ id: num(entry?.id), name: str(entry?.name).trim(), emoji: str(entry?.emoji).trim() }))
-      .filter((subject: Subject) => subject.name)
+      .filter((category: Category) => category.name)
     const notes: Note[] = (Array.isArray(parsed.notes) ? parsed.notes : [])
-      .map((entry: any) => ({ id: num(entry?.id), timestamp: str(entry?.timestamp), student: str(entry?.student).trim(), subject: str(entry?.subject).trim(), text: str(entry?.text).trim() }))
+      .map((entry: any) => ({ id: num(entry?.id), timestamp: str(entry?.timestamp), student: str(entry?.student).trim(), category: str(entry?.category ?? entry?.subject).trim(), text: str(entry?.text).trim() }))
       .filter((note: Note) => note.text || note.student)
-    const highest = Math.max(0, ...students.map((s) => s.id), ...subjects.map((s) => s.id), ...notes.map((n) => n.id))
+    const highest = Math.max(0, ...students.map((s) => s.id), ...categories.map((s) => s.id), ...notes.map((n) => n.id))
     return {
       id,
       title: str(parsed.title).trim() || 'My class',
       students,
-      subjects,
+      categories,
       notes,
       nextId: Math.max(num(parsed.nextId), highest + 1, 1),
     }
@@ -117,14 +118,14 @@ function assignIds<T>(notebook: Notebook, items: Omit<T, 'id'>[]): { items: T[];
   return { items: withIds, nextId }
 }
 
-/** Starts a new class with the default subjects, makes it current, and returns it. */
+/** Starts a new class with the default categories, makes it current, and returns it. */
 export function createNotebook(title: string, names: string[]): Notebook {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  const empty: Notebook = { id, title: title.trim() || 'My class', students: [], subjects: [], notes: [], nextId: 1 }
-  const subjects = assignIds<Subject>(empty, [...DEFAULT_SUBJECTS])
-  const withSubjects = { ...empty, subjects: subjects.items, nextId: subjects.nextId }
-  const students = assignIds<Student>(withSubjects, names.map((name) => ({ name, initials: deriveInitials(name) })))
-  const notebook = saveNotebook({ ...withSubjects, students: students.items, nextId: students.nextId })
+  const empty: Notebook = { id, title: title.trim() || 'My class', students: [], categories: [], notes: [], nextId: 1 }
+  const categories = assignIds<Category>(empty, [...DEFAULT_CATEGORIES])
+  const withCategories = { ...empty, categories: categories.items, nextId: categories.nextId }
+  const students = assignIds<Student>(withCategories, names.map((name) => ({ name, initials: deriveInitials(name) })))
+  const notebook = saveNotebook({ ...withCategories, students: students.items, nextId: students.nextId })
   setCurrentNotebook(id)
   return notebook
 }
@@ -156,15 +157,15 @@ export function deleteNote(notebook: Notebook, id: number): Notebook {
   return saveNotebook({ ...notebook, notes: notebook.notes.filter((entry) => entry.id !== id) })
 }
 
-export function addSubject(notebook: Notebook, subject: Omit<Subject, 'id'>): Notebook {
-  const added = assignIds<Subject>(notebook, [subject])
-  return saveNotebook({ ...notebook, subjects: [...notebook.subjects, ...added.items], nextId: added.nextId })
+export function addCategory(notebook: Notebook, category: Omit<Category, 'id'>): Notebook {
+  const added = assignIds<Category>(notebook, [category])
+  return saveNotebook({ ...notebook, categories: [...notebook.categories, ...added.items], nextId: added.nextId })
 }
 
-export function updateSubject(notebook: Notebook, subject: Subject): Notebook {
-  return saveNotebook({ ...notebook, subjects: notebook.subjects.map((entry) => (entry.id === subject.id ? subject : entry)) })
+export function updateCategory(notebook: Notebook, category: Category): Notebook {
+  return saveNotebook({ ...notebook, categories: notebook.categories.map((entry) => (entry.id === category.id ? category : entry)) })
 }
 
-export function deleteSubject(notebook: Notebook, id: number): Notebook {
-  return saveNotebook({ ...notebook, subjects: notebook.subjects.filter((entry) => entry.id !== id) })
+export function deleteCategory(notebook: Notebook, id: number): Notebook {
+  return saveNotebook({ ...notebook, categories: notebook.categories.filter((entry) => entry.id !== id) })
 }

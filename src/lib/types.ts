@@ -4,14 +4,14 @@ export interface Student {
   initials: string
 }
 
-/** A teacher-controlled subject or developmental topic. */
-export interface Subject {
+/** A teacher-controlled category or developmental topic. */
+export interface Category {
   id: number
   name: string
   emoji: string
 }
 
-export const DEFAULT_SUBJECTS: readonly Omit<Subject, 'id'>[] = [
+export const DEFAULT_CATEGORIES: readonly Omit<Category, 'id'>[] = [
   { name: 'Literacy', emoji: '📖' },
   { name: 'Math', emoji: '🔢' },
   { name: 'Science & Inquiry', emoji: '🔎' },
@@ -26,7 +26,7 @@ export interface Note {
   id: number
   timestamp: string
   student: string
-  subject: string
+  category: string
   text: string
 }
 
@@ -37,9 +37,9 @@ export interface Notebook {
   id: string
   title: string
   students: Student[]
-  subjects: Subject[]
+  categories: Category[]
   notes: Note[]
-  /** Next id handed to a student, subject, or note. Ids are never reused, so deleting is safe. */
+  /** Next id handed to a student, category, or note. Ids are never reused, so deleting is safe. */
   nextId: number
 }
 

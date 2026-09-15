@@ -7,11 +7,11 @@
   import X from '@lucide/svelte/icons/x'
   import { readDraft, removeDraft, writeDraft } from './lib/drafts'
   import { timestampNow } from './lib/time'
-  import type { Note, NoteDraft, Subject } from './lib/types'
+  import type { Note, NoteDraft, Category } from './lib/types'
 
   interface Props {
     notebookId: string
-    subjects: Subject[]
+    categories: Category[]
     error: string
     onsave: (drafts: NoteDraft[]) => boolean
     onupdate: (note: Note) => boolean
@@ -20,12 +20,12 @@
     onopenchange?: (open: boolean) => void
   }
 
-  let { notebookId, subjects, error, onsave, onupdate, ondelete, ondraftchange, onopenchange }: Props = $props()
+  let { notebookId, categories, error, onsave, onupdate, ondelete, ondraftchange, onopenchange }: Props = $props()
   let dialog: HTMLDialogElement
   let textarea: HTMLTextAreaElement | undefined
   let editing = $state<Note | null>(null)
   let student = $state('')
-  let subject = $state('')
+  let category = $state('')
   let text = $state('')
   let timestamp = $state('')
   let isOpen = $state(false)
@@ -33,13 +33,13 @@
   let draftStatus = $state('')
   let confirmingDelete = $state(false)
 
-  const canSave = $derived(!!student && !!subject && !!text.trim() && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(timestamp))
-  const straySubject = $derived(editing && !subjects.some((entry) => entry.name === editing!.subject) ? editing.subject : '')
+  const canSave = $derived(!!student && !!category && !!text.trim() && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(timestamp))
+  const strayCategory = $derived(editing && !categories.some((entry) => entry.name === editing!.category) ? editing.category : '')
 
   $effect(() => {
-    const draft = { subject, text, timestamp }
+    const draft = { category, text, timestamp }
     if (!isOpen || !readyToDraft || editing || !student) return
-    const hasDraft = !!subject || !!text.trim()
+    const hasDraft = !!category || !!text.trim()
     // Untracked so the parent's callback (which reads its own state) doesn't become a dependency and loop.
     untrack(() => {
       if (hasDraft) {
@@ -59,10 +59,10 @@
     confirmingDelete = false
     readyToDraft = false
     const saved = readDraft(notebookId, selectedStudent)
-    subject = saved?.subject && subjects.some((entry) => entry.name === saved.subject) ? saved.subject : ''
+    category = saved?.category && categories.some((entry) => entry.name === saved.category) ? saved.category : ''
     text = saved?.text ?? ''
     timestamp = saved?.timestamp || timestampNow()
-    draftStatus = saved && (subject || saved.text.trim()) ? 'Draft restored' : ''
+    draftStatus = saved && (category || saved.text.trim()) ? 'Draft restored' : ''
     dialog.showModal()
     isOpen = true
     onopenchange?.(true)
@@ -74,7 +74,7 @@
   export async function edit(note: Note) {
     editing = note
     student = note.student
-    subject = note.subject
+    category = note.category
     text = note.text
     timestamp = note.timestamp || timestampNow()
     draftStatus = ''
@@ -98,7 +98,7 @@
   }
 
   function clearDraft() {
-    subject = ''
+    category = ''
     text = ''
     timestamp = timestampNow()
     draftStatus = ''
@@ -109,7 +109,7 @@
 
   function save() {
     if (!canSave) return
-    const draft = { student, subject, text: text.trim(), timestamp }
+    const draft = { student, category, text: text.trim(), timestamp }
     const ok = editing ? onupdate({ ...editing, ...draft }) : onsave([draft])
     if (ok) {
       if (!editing) {
@@ -146,25 +146,25 @@
       </div>
       <div class="composer-heading-actions">
         {#if !editing}
-          <button class="clear-draft" type="button" onclick={clearDraft} disabled={!subject && !text.trim()}><RotateCcw size={18} /><span>Clear</span></button>
+          <button class="clear-draft" type="button" onclick={clearDraft} disabled={!category && !text.trim()}><RotateCcw size={18} /><span>Clear</span></button>
         {/if}
         <button class="modal-close-inline" type="button" onclick={close} aria-label="Close note editor"><X size={23} /></button>
       </div>
     </header>
 
-    <fieldset class="subject-picker">
-      <legend>Subject or topic</legend>
-      <div class="subject-tiles">
-        {#each subjects as entry (entry.id)}
-          <button type="button" class="subject-tile" class:selected={subject === entry.name} aria-pressed={subject === entry.name} onclick={() => (subject = entry.name)}>
-            <span class="subject-tile-emoji" aria-hidden="true">{entry.emoji || '•'}</span>
+    <fieldset class="category-picker">
+      <legend>Category</legend>
+      <div class="category-tiles">
+        {#each categories as entry (entry.id)}
+          <button type="button" class="category-tile" class:selected={category === entry.name} aria-pressed={category === entry.name} onclick={() => (category = entry.name)}>
+            <span class="category-tile-emoji" aria-hidden="true">{entry.emoji || '•'}</span>
             <span>{entry.name}</span>
-            <span class="subject-tile-check" aria-hidden="true"><Check size={17} strokeWidth={3} /></span>
+            <span class="category-tile-check" aria-hidden="true"><Check size={17} strokeWidth={3} /></span>
           </button>
         {/each}
-        {#if straySubject}<button type="button" class="subject-tile selected" aria-pressed="true"><span>•</span><span>{straySubject}</span><Check size={17} /></button>{/if}
+        {#if strayCategory}<button type="button" class="category-tile selected" aria-pressed="true"><span>•</span><span>{strayCategory}</span><Check size={17} /></button>{/if}
       </div>
-      {#if !subjects.length}<p class="field-help">Add a subject on the Subjects screen before writing a note.</p>{/if}
+      {#if !categories.length}<p class="field-help">Add a category on the Categories screen before writing a note.</p>{/if}
     </fieldset>
 
     <label class="note-label" for="note-text">What did you notice?</label>

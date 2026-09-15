@@ -1,7 +1,7 @@
 {
   "name": "Observations",
   "short_name": "Observations",
-  "description": "Quick classroom observations, organized by student and subject.",
+  "description": "Quick classroom observations, organized by student and category.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f6f1",
