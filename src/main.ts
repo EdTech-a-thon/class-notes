@@ -2,9 +2,8 @@ import { mount } from 'svelte'
 import './app.css'
 import App from './App.svelte'
 
-// Cloudflare Web Analytics. The token is set as VITE_CF_BEACON on the production host only, so
-// local and preview builds never report views.
-const cfBeacon = import.meta.env.VITE_CF_BEACON?.trim()
+// Cloudflare Web Analytics. Configure the token in the production build environment.
+const cfBeacon = (import.meta.env.VITE_CF_BEACON_TOKEN || import.meta.env.VITE_CF_BEACON)?.trim()
 if (cfBeacon) {
   const script = document.createElement('script')
   script.type = 'module'

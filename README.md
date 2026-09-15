@@ -36,7 +36,7 @@ npm install
 npm run dev
 ```
 
-`VITE_CF_BEACON` (optional) is a Cloudflare Web Analytics token. Set it in the production environment only; when unset the beacon script is not loaded.
+`VITE_CF_BEACON_TOKEN` (optional) is the Cloudflare Web Analytics token. Set it for the Production environment in Vercel and redeploy; when unset, the beacon script is not loaded. The previous name, `VITE_CF_BEACON`, still works.
 
 ## Commands
 
