@@ -26,6 +26,7 @@ The usual app origin is `http://localhost:5173`. Configure:
 
 - `VITE_AUTH_BROKER_URL`: auth broker URL; defaults to `https://auth.teacher.dev`.
 - `VITE_GOOGLE_TEMPLATE_ID`: spreadsheet ID from the new three-tab observation template.
+- `VITE_CF_BEACON` (optional): Cloudflare Web Analytics token. Set it in Vercel's production environment only; when unset the beacon script is not loaded.
 
 ## Local click-through without Google
 
