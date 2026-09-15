@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import Check from '@lucide/svelte/icons/check'
   import Clock from '@lucide/svelte/icons/clock'
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw'
@@ -42,14 +42,17 @@
     const draft = { subject, text, timestamp }
     if (!isOpen || !readyToDraft || editing || !student) return
     const hasDraft = !!subject || !!text.trim()
-    if (hasDraft) {
-      writeDraft(notebookId, student, draft)
-      draftStatus = 'Draft saved on this device'
-    } else {
-      removeDraft(notebookId, student)
-      draftStatus = ''
-    }
-    ondraftchange?.(student, hasDraft)
+    // Untracked so the parent's callback (which reads its own state) doesn't become a dependency and loop.
+    untrack(() => {
+      if (hasDraft) {
+        writeDraft(notebookId, student, draft)
+        draftStatus = 'Draft saved on this device'
+      } else {
+        removeDraft(notebookId, student)
+        draftStatus = ''
+      }
+      ondraftchange?.(student, hasDraft)
+    })
   })
 
   export async function open(selectedStudent: string) {
