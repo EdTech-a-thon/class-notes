@@ -9,7 +9,7 @@ export const googleConfig = {
   templateId: import.meta.env.VITE_GOOGLE_TEMPLATE_ID?.trim() ?? '',
 }
 
-export const missingTemplateConfig = !googleConfig.templateId
+export const missingTemplateConfig = !googleConfig.templateId && !FAKE_GOOGLE
 
 declare global {
   interface Window {
@@ -98,7 +98,7 @@ export async function pickSpreadsheet(): Promise<PickedSpreadsheet | null> {
       .setAppId(current.appId)
       .setDeveloperKey(current.apiKey)
       .setOAuthToken(current.accessToken)
-      .setTitle('Choose your participation grade book')
+      .setTitle('Choose your observation notebook')
       .addView(view)
       .setCallback((data: Record<string, any>) => {
         const action = data[picker.Response.ACTION]
@@ -121,6 +121,7 @@ export async function pickSpreadsheet(): Promise<PickedSpreadsheet | null> {
 // `authuser` pins the copy page to the connected Google account, so a browser whose default
 // profile is a different account does not drop the copy into the wrong Drive.
 export function templateCopyUrl(email?: string): string {
+  if (FAKE_GOOGLE) return '#'
   if (!googleConfig.templateId) return '#'
   const url = new URL(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(googleConfig.templateId)}/copy`)
   if (email) url.searchParams.set('authuser', email)

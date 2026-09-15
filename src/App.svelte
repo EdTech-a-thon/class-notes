@@ -2,100 +2,73 @@
   import { onMount, tick } from 'svelte'
   import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right'
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right'
+  import BookOpen from '@lucide/svelte/icons/book-open'
   import Check from '@lucide/svelte/icons/check'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
-  import ClipboardCheck from '@lucide/svelte/icons/clipboard-check'
+  import ClipboardPen from '@lucide/svelte/icons/clipboard-pen'
   import CopyPlus from '@lucide/svelte/icons/copy-plus'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
-  import Lock from '@lucide/svelte/icons/lock'
   import LogOut from '@lucide/svelte/icons/log-out'
-  import Maximize from '@lucide/svelte/icons/maximize'
-  import Minimize from '@lucide/svelte/icons/minimize'
-  import NotebookPen from '@lucide/svelte/icons/notebook-pen'
-  import Pencil from '@lucide/svelte/icons/pencil'
   import Plus from '@lucide/svelte/icons/plus'
   import RefreshCw from '@lucide/svelte/icons/refresh-cw'
+  import Settings2 from '@lucide/svelte/icons/settings-2'
+  import Users from '@lucide/svelte/icons/users'
   import X from '@lucide/svelte/icons/x'
   import {
-    BrokerError,
-    connectDrive,
-    consumeArrivalError,
-    describeArrivalError,
-    getConnection,
-    signIn,
-    signOut,
-    type DriveConnection,
+    BrokerError, connectDrive, consumeArrivalError, describeArrivalError,
+    getConnection, signIn, signOut, type DriveConnection,
   } from './lib/broker'
+  import { authorize, clearAuthorization, missingTemplateConfig, pickSpreadsheet, templateCopyUrl } from './lib/google'
   import {
-    authorize,
-    clearAuthorization,
-    missingTemplateConfig,
-    pickSpreadsheet,
-    templateCopyUrl,
-  } from './lib/google'
-  import {
-    getRecentSpreadsheets,
-    getRememberedSpreadsheet,
-    hasCopiedTemplate,
-    markTemplateCopied,
-    forgetEverything,
-    rememberSpreadsheet,
-    type RememberedSpreadsheet,
+    getRecentSpreadsheets, getRememberedSpreadsheet, hasCopiedTemplate, markTemplateCopied,
+    forgetEverything, rememberSpreadsheet, type RememberedSpreadsheet,
   } from './lib/setup'
+  import { studentsWithDrafts } from './lib/drafts'
   import {
-    addNotes,
-    addStudents,
-    addSubject,
-    deleteNote,
-    isAuthorizationError,
-    loadGradebook,
-    parseRosterNames,
-    renameSpreadsheet,
-    totalFor,
-    updateGrade,
-    updateNote,
-    type NoteDraft,
+    addNotes, addStudents, addSubject, deleteNote, deleteSubject, isAuthorizationError,
+    loadGradebook, parseRosterNames, updateNote, updateSubject, type NoteDraft,
   } from './lib/sheets'
-  import { DIMENSIONS, type DimensionKey, type Gradebook, type Grades, type Note, type Student, type Subject } from './lib/types'
+  import type { Gradebook, Note, Student, Subject } from './lib/types'
   import NoteEditor from './NoteEditor.svelte'
   import NotesView from './NotesView.svelte'
+  import SubjectsView from './SubjectsView.svelte'
 
   type Session = 'checking' | 'signed_out' | 'not_connected' | 'invalid' | 'ready'
-  type View = 'roster' | 'notes'
+  type View = 'today' | 'notes' | 'subjects'
 
   let session: Session = 'checking'
-  let view: View = 'roster'
+  let view: View = 'today'
   let connection: DriveConnection | null = null
   let gradebook: Gradebook | null = null
-  let autoOpening = false // a returning teacher goes straight to the roster, no step list
-  let pendingGradebook: Gradebook | null = null // loaded at pick time on the first run, shown by step 5
+  let pendingGradebook: Gradebook | null = null
   let spreadsheet: RememberedSpreadsheet | null = null
-  let recent: RememberedSpreadsheet[] = [] // grade books opened on this device, for the switcher menu
-  let switcherOpen = false
-  let switcher: HTMLElement | undefined
-  let fullscreen = false
-  let renaming = false
-  let draftTitle = ''
-  let titleInput: HTMLInputElement | undefined
-  // iPadOS Safari before 16.4 only has the webkit-prefixed API; iPhones have none, so the button hides.
-  const fullscreenSupported =
-    typeof document !== 'undefined' && !!(document.fullscreenEnabled || (document as any).webkitFullscreenEnabled)
+  let recent: RememberedSpreadsheet[] = []
   let templateCopied = false
-  let selectedStudent: Student | null = null
-  let draftGrades: Grades | null = null
+  let autoOpening = false
   let loading = false
   let saving = false
-  let notice = ''
   let error = ''
-  let justSaved = '' // student name whose card is pulsing after a save
-  let justSavedTimer: ReturnType<typeof setTimeout> | undefined
-  let modal: HTMLDialogElement
+  let notice = ''
+  let switcherOpen = false
+  let switcher: HTMLElement | undefined
   let rosterModal: HTMLDialogElement
+  let rosterTextarea: HTMLTextAreaElement | undefined
   let rosterText = ''
   let rosterOpen = false
-  let rosterTextarea: HTMLTextAreaElement | undefined
-  let noteEditor: ReturnType<typeof NoteEditor> | undefined
+  let noteEditor: any
   let noteOpen = false
+  let justSaved = ''
+  let justSavedTimer: ReturnType<typeof setTimeout> | undefined
+  let draftStudents = new Set<string>()
+
+  $: todayNotes = gradebook?.notes.filter((note) => note.timestamp.slice(0, 10) === gradebook?.dayKey) ?? []
+  $: observedToday = new Set(todayNotes.map((note) => note.student))
+  $: rosterNames = parseRosterNames(rosterText, gradebook?.students.map((student) => student.name) ?? [])
+  $: signedIn = session !== 'checking' && session !== 'signed_out'
+  $: driveReady = session === 'ready'
+  $: stepsDone = [signedIn, driveReady, templateCopied || !!spreadsheet, !!spreadsheet, false]
+  $: currentStep = stepsDone.indexOf(false) + 1
+  $: stepState = (step: number) => stepsDone[step - 1] ? 'done' : step === currentStep ? 'current' : 'locked'
 
   onMount(() => {
     spreadsheet = getRememberedSpreadsheet()
@@ -105,46 +78,19 @@
     if (arrival === 'access_denied') notice = describeArrivalError(arrival)
     else if (arrival) error = describeArrivalError(arrival)
     void refreshSession()
-    syncFullscreen()
-    document.addEventListener('webkitfullscreenchange', syncFullscreen)
-    return () => document.removeEventListener('webkitfullscreenchange', syncFullscreen)
   })
 
-  function syncFullscreen() {
-    fullscreen = !!(document.fullscreenElement || (document as any).webkitFullscreenElement)
+  function resetMessages() { error = ''; notice = '' }
+  function refreshDraftStudents(book = gradebook) {
+    draftStudents = book ? studentsWithDrafts(book.id, book.students.map((student) => student.name)) : new Set()
   }
-
-  async function toggleFullscreen() {
-    const root = document.documentElement as any
-    try {
-      if (fullscreen) await (document.exitFullscreen?.() ?? (document as any).webkitExitFullscreen?.())
-      else await (root.requestFullscreen?.() ?? root.webkitRequestFullscreen?.())
-    } catch {
-      // The browser refused (no user gesture, embedded, etc.); the button just stays as it is.
-    }
-    syncFullscreen()
+  function updateDraftStudent(student: string, hasDraft: boolean) {
+    const next = new Set(draftStudents)
+    if (hasDraft) next.add(student)
+    else next.delete(student)
+    draftStudents = next
   }
-
-  $: classPoints = gradebook?.students.reduce((sum, student) => sum + totalFor(student.grades), 0) ?? 0
-  $: possiblePoints = (gradebook?.students.length ?? 0) * DIMENSIONS.length
-  $: rosterNames = parseRosterNames(rosterText, gradebook?.students.map((student) => student.name) ?? [])
-  // Onboarding is a strict ladder: a step is only actionable once every step above it is done.
-  $: signedIn = session !== 'checking' && session !== 'signed_out'
-  $: driveReady = session === 'ready'
-  $: stepsDone = [signedIn, driveReady, templateCopied || !!spreadsheet, !!spreadsheet, false]
-  $: currentStep = stepsDone.indexOf(false) + 1
-  $: stepState = (step: number) =>
-    stepsDone[step - 1] ? 'done' : step === currentStep ? 'current' : 'locked'
-
-  function resetMessages() {
-    notice = ''
-    error = ''
-  }
-
-  function showError(caught: unknown) {
-    error = caught instanceof Error ? caught.message : 'Something went wrong. Please try again.'
-  }
-
+  function showError(caught: unknown) { error = caught instanceof Error ? caught.message : 'Something went wrong. Please try again.' }
   function sessionFromConnection(current: DriveConnection | null): Session {
     if (!current) return 'signed_out'
     if (!current.connected) return 'not_connected'
@@ -159,877 +105,269 @@
       session = 'signed_out'
       showError(caught)
     }
-    // Every step already done: skip the list entirely and open the roster.
     if (session === 'ready' && spreadsheet) await openGradebook(spreadsheet.id)
     autoOpening = false
   }
 
-  // Broker failures change what the setup screen should offer; Google 401s mean the token is dead.
   function handleFailure(caught: unknown) {
     if (caught instanceof BrokerError) {
       if (caught.signedOut) session = 'signed_out'
       else if (caught.status === 404) session = 'not_connected'
       else if (caught.status === 409) session = 'invalid'
-      if (caught.signedOut || caught.needsConnection) {
-        clearAuthorization()
-        gradebook = null
-        pendingGradebook = null
-      }
-    } else if (isAuthorizationError(caught)) {
-      clearAuthorization()
-    }
+      if (caught.signedOut || caught.needsConnection) { clearAuthorization(); gradebook = null; pendingGradebook = null }
+    } else if (isAuthorizationError(caught)) clearAuthorization()
     showError(caught)
   }
 
   async function startSignIn() {
-    resetMessages()
-    loading = true
-    try {
-      await signIn()
-    } catch (caught) {
-      showError(caught)
-      loading = false
-    }
+    resetMessages(); loading = true
+    try { await signIn() } catch (caught) { showError(caught); loading = false }
   }
-
   async function startConnectDrive() {
-    resetMessages()
-    loading = true
-    try {
-      await connectDrive()
-    } catch (caught) {
-      showError(caught)
-      loading = false
-    }
+    resetMessages(); loading = true
+    try { await connectDrive() } catch (caught) { showError(caught); loading = false }
   }
-
   async function endSession() {
-    resetMessages()
-    loading = true
-    try {
-      await signOut()
-    } catch (caught) {
-      showError(caught)
-    } finally {
-      clearAuthorization()
-      forgetEverything()
-      gradebook = null
-      pendingGradebook = null
-      selectedStudent = null
-      spreadsheet = null
-      recent = []
-      view = 'roster'
-      templateCopied = false
-      autoOpening = false
-      connection = null
-      session = 'signed_out'
-      loading = false
+    resetMessages(); loading = true
+    try { await signOut() } catch (caught) { showError(caught) }
+    finally {
+      clearAuthorization(); forgetEverything(); gradebook = null; pendingGradebook = null; spreadsheet = null
+      recent = []; view = 'today'; templateCopied = false; autoOpening = false; connection = null
+      session = 'signed_out'; loading = false
     }
   }
 
   async function openGradebook(id: string) {
-    resetMessages()
-    loading = true
+    resetMessages(); loading = true
     try {
       const token = await authorize()
       gradebook = await loadGradebook(id, token)
-      // The title is the Drive file name, so a rename in Google Sheets shows up here on the next
-      // load; keep the switcher's recent list in step with it.
+      refreshDraftStudents(gradebook)
       if (gradebook.title && gradebook.title !== spreadsheet?.name) {
-        spreadsheet = { id, name: gradebook.title }
-        rememberSpreadsheet(spreadsheet)
+        spreadsheet = { id, name: gradebook.title }; rememberSpreadsheet(spreadsheet)
       }
-    } catch (caught) {
-      handleFailure(caught)
-    } finally {
-      loading = false
-    }
+    } catch (caught) { handleFailure(caught) }
+    finally { loading = false }
   }
 
-  function copyTemplate() {
-    markTemplateCopied()
-    templateCopied = true
-  }
-
+  function copyTemplate() { markTemplateCopied(); templateCopied = true }
   async function chooseSpreadsheet() {
-    resetMessages()
-    loading = true
+    resetMessages(); loading = true
     try {
       const picked = await pickSpreadsheet()
       if (!picked) return
-      // Check the tabs now so a wrong file is caught on this step. The roster waits behind step 5
-      // on this first run; every later visit skips the list and opens it directly.
       const token = await authorize()
       pendingGradebook = await loadGradebook(picked.id, token)
       spreadsheet = { id: picked.id, name: pendingGradebook.title || picked.name }
-      rememberSpreadsheet(spreadsheet)
-      templateCopied = true
-    } catch (caught) {
-      handleFailure(caught)
-    } finally {
-      loading = false
-    }
+      rememberSpreadsheet(spreadsheet); templateCopied = true
+    } catch (caught) { handleFailure(caught) }
+    finally { loading = false }
   }
-
-  function startGrading() {
+  function openNotebook() {
     if (!spreadsheet) return
-    if (pendingGradebook) {
-      resetMessages()
-      gradebook = pendingGradebook
-      pendingGradebook = null
-      return
-    }
-    // No preloaded roster means an automatic open failed earlier; this is the retry.
-    return openGradebook(spreadsheet.id)
-  }
-
-  async function startRename() {
-    if (!gradebook) return
-    draftTitle = gradebook.title
-    renaming = true
-    await tick()
-    titleInput?.select()
-  }
-
-  function cancelRename() {
-    renaming = false
-  }
-
-  async function saveRename() {
-    if (!gradebook || saving) return
-    const next = draftTitle.trim()
-    if (!next || next === gradebook.title) return cancelRename()
-    saving = true
-    resetMessages()
-    try {
-      const token = await authorize()
-      const title = await renameSpreadsheet(gradebook.id, next, token)
-      gradebook = { ...gradebook, title }
-      spreadsheet = { id: gradebook.id, name: title }
-      rememberSpreadsheet(spreadsheet)
-      renaming = false
-    } catch (caught) {
-      handleFailure(caught)
-    } finally {
-      saving = false
-    }
+    if (pendingGradebook) { resetMessages(); gradebook = pendingGradebook; refreshDraftStudents(gradebook); pendingGradebook = null; return }
+    void openGradebook(spreadsheet.id)
   }
 
   async function openRosterEditor() {
-    rosterText = ''
-    resetMessages()
-    rosterOpen = true
-    rosterModal.showModal()
-    await tick()
-    rosterTextarea?.focus()
+    rosterText = ''; resetMessages(); rosterOpen = true; rosterModal.showModal(); await tick(); rosterTextarea?.focus()
   }
-
-  // Names are appended to the "Class Roster" tab, then the grade book is reloaded so today's rows
-  // exist for everyone. The text stays in the box if the write fails, so nothing has to be retyped.
   async function saveRoster() {
     if (!gradebook || !rosterNames.length) return
-    saving = true
-    resetMessages()
-    const id = gradebook.id
+    saving = true; resetMessages()
     try {
       const token = await authorize()
-      await addStudents(id, rosterNames, token)
-      gradebook = await loadGradebook(id, token)
+      await addStudents(gradebook.id, rosterNames, token)
+      gradebook = await loadGradebook(gradebook.id, token)
+      refreshDraftStudents(gradebook)
       rosterModal.close()
-    } catch (caught) {
-      handleFailure(caught)
-      if (!gradebook) rosterModal.close()
-    } finally {
-      saving = false
-    }
+    } catch (caught) { handleFailure(caught); if (!gradebook) rosterModal.close() }
+    finally { saving = false }
   }
 
   function flashSaved(name: string) {
-    clearTimeout(justSavedTimer)
-    justSaved = name
+    clearTimeout(justSavedTimer); justSaved = name
     justSavedTimer = setTimeout(() => (justSaved = ''), 1400)
   }
+  function newNote(student: string) { resetMessages(); void noteEditor?.open(student) }
+  function editNote(note: Note) { resetMessages(); void noteEditor?.edit(note) }
 
-  function editStudent(student: Student) {
-    selectedStudent = student
-    draftGrades = { ...student.grades }
-    resetMessages()
-    modal.showModal()
-  }
-
-  function toggleDimension(key: DimensionKey) {
-    if (draftGrades) draftGrades = { ...draftGrades, [key]: !draftGrades[key] }
-  }
-
-  async function saveGrade() {
-    if (!gradebook || !selectedStudent || !draftGrades) return
-    saving = true
-    resetMessages()
-    const original = selectedStudent
-    const updated: Student = { ...original, grades: { ...draftGrades } }
-
-    try {
-      const token = await authorize()
-      updated.row = await updateGrade(gradebook.id, updated, gradebook.dayKey, token)
-      gradebook = {
-        ...gradebook,
-        students: gradebook.students.map((student) =>
-          student.name === original.name ? updated : student,
-        ),
-      }
-      modal.close()
-      flashSaved(updated.name)
-    } catch (caught) {
-      handleFailure(caught)
-      if (!gradebook) modal.close()
-    } finally {
-      saving = false
-    }
-  }
-
-  // Notes are written straight to the "Notes" tab. Each handler resolves true on success so the
-  // editor knows to close; on failure the message shows inside the editor and nothing is lost.
   async function saveNotes(drafts: NoteDraft[]): Promise<boolean> {
     if (!gradebook) return false
-    saving = true
-    resetMessages()
+    saving = true; resetMessages()
     try {
       const token = await authorize()
       const added = await addNotes(gradebook.id, drafts, token)
       gradebook = { ...gradebook, notes: [...gradebook.notes, ...added] }
+      if (added[0]) flashSaved(added[0].student)
       return true
-    } catch (caught) {
-      handleFailure(caught)
-      return false
-    } finally {
-      saving = false
-    }
+    } catch (caught) { handleFailure(caught); return false }
+    finally { saving = false }
   }
-
   async function saveNoteEdit(note: Note): Promise<boolean> {
     if (!gradebook) return false
-    saving = true
-    resetMessages()
+    saving = true; resetMessages()
     try {
-      const token = await authorize()
-      await updateNote(gradebook.id, note, token)
-      gradebook = { ...gradebook, notes: gradebook.notes.map((entry) => (entry.row === note.row ? note : entry)) }
+      const token = await authorize(); await updateNote(gradebook.id, note, token)
+      gradebook = { ...gradebook, notes: gradebook.notes.map((entry) => entry.row === note.row ? note : entry) }
       return true
-    } catch (caught) {
-      handleFailure(caught)
-      return false
-    } finally {
-      saving = false
-    }
+    } catch (caught) { handleFailure(caught); return false }
+    finally { saving = false }
   }
-
   async function removeNote(note: Note): Promise<boolean> {
     if (!gradebook) return false
-    saving = true
-    resetMessages()
+    saving = true; resetMessages()
     try {
-      const token = await authorize()
-      await deleteNote(gradebook.id, gradebook.notesSheetId, note.row, token)
-      // The sheet closed the gap, so every note below moves up one row.
-      gradebook = {
-        ...gradebook,
-        notes: gradebook.notes
-          .filter((entry) => entry.row !== note.row)
-          .map((entry) => (entry.row > note.row ? { ...entry, row: entry.row - 1 } : entry)),
-      }
+      const token = await authorize(); await deleteNote(gradebook.id, gradebook.notesSheetId, note.row, token)
+      gradebook = { ...gradebook, notes: gradebook.notes.filter((entry) => entry.row !== note.row).map((entry) => entry.row > note.row ? { ...entry, row: entry.row - 1 } : entry) }
       return true
-    } catch (caught) {
-      handleFailure(caught)
-      return false
-    } finally {
-      saving = false
-    }
+    } catch (caught) { handleFailure(caught); return false }
+    finally { saving = false }
   }
 
-  async function createSubject(subject: Subject): Promise<boolean> {
+  async function createSubject(subject: Omit<Subject, 'row'>): Promise<boolean> {
     if (!gradebook) return false
-    saving = true
-    resetMessages()
+    saving = true; resetMessages()
     try {
-      const token = await authorize()
-      await addSubject(gradebook.id, subject, token)
-      gradebook = { ...gradebook, subjects: [...gradebook.subjects, subject] }
+      const token = await authorize(); const added = await addSubject(gradebook.id, subject, token)
+      gradebook = { ...gradebook, subjects: [...gradebook.subjects, added] }; return true
+    } catch (caught) { handleFailure(caught); return false }
+    finally { saving = false }
+  }
+  async function saveSubject(subject: Subject): Promise<boolean> {
+    if (!gradebook) return false
+    saving = true; resetMessages()
+    try {
+      const token = await authorize(); await updateSubject(gradebook.id, subject, token)
+      gradebook = { ...gradebook, subjects: gradebook.subjects.map((entry) => entry.row === subject.row ? subject : entry) }; return true
+    } catch (caught) { handleFailure(caught); return false }
+    finally { saving = false }
+  }
+  async function removeSubject(subject: Subject): Promise<boolean> {
+    if (!gradebook) return false
+    saving = true; resetMessages()
+    try {
+      const token = await authorize(); await deleteSubject(gradebook.id, gradebook.subjectsSheetId, subject.row, token)
+      gradebook = { ...gradebook, subjects: gradebook.subjects.filter((entry) => entry.row !== subject.row).map((entry) => entry.row > subject.row ? { ...entry, row: entry.row - 1 } : entry) }
       return true
-    } catch (caught) {
-      handleFailure(caught)
-      return false
-    } finally {
-      saving = false
-    }
+    } catch (caught) { handleFailure(caught); return false }
+    finally { saving = false }
   }
 
-  function newNote(student?: string) {
-    resetMessages()
-    void noteEditor?.open(student)
-  }
-
-  function editNote(note: Note) {
-    resetMessages()
-    void noteEditor?.edit(note)
-  }
-
-  // From the grade editor: close it and open the composer with this student already picked.
-  function noteAboutSelected() {
-    const name = selectedStudent?.name
-    modal.close()
-    if (name) newNote(name)
-  }
-
-  function toggleSwitcher() {
-    if (!switcherOpen) recent = getRecentSpreadsheets()
-    switcherOpen = !switcherOpen
-  }
-
-  function closeSwitcherOnOutsideClick(event: PointerEvent) {
-    if (switcherOpen && switcher && !switcher.contains(event.target as Node)) switcherOpen = false
-  }
-
-  function closeSwitcherOnEscape(event: KeyboardEvent) {
-    if (event.key === 'Escape' && switcherOpen) switcherOpen = false
-  }
-
-  // Switching classes never goes back through onboarding. The current roster stays on screen until
-  // the new one has loaded, so a cancelled picker or a wrong file changes nothing.
+  function toggleSwitcher() { if (!switcherOpen) recent = getRecentSpreadsheets(); switcherOpen = !switcherOpen }
+  function closeSwitcherOnOutsideClick(event: PointerEvent) { if (switcherOpen && switcher && !switcher.contains(event.target as Node)) switcherOpen = false }
+  function closeSwitcherOnEscape(event: KeyboardEvent) { if (event.key === 'Escape') switcherOpen = false }
   async function switchTo(id: string, name: string) {
-    switcherOpen = false
-    if (id === gradebook?.id) return
-    resetMessages()
-    loading = true
+    switcherOpen = false; if (id === gradebook?.id) return; resetMessages(); loading = true
     try {
-      const token = await authorize()
-      const next = await loadGradebook(id, token)
-      spreadsheet = { id, name: next.title || name }
-      rememberSpreadsheet(spreadsheet)
-      gradebook = next
-    } catch (caught) {
-      handleFailure(caught)
-    } finally {
-      loading = false
-    }
+      const token = await authorize(); const next = await loadGradebook(id, token)
+      spreadsheet = { id, name: next.title || name }; rememberSpreadsheet(spreadsheet); gradebook = next; view = 'today'
+      refreshDraftStudents(next)
+    } catch (caught) { handleFailure(caught) }
+    finally { loading = false }
   }
-
   async function switchViaPicker() {
-    switcherOpen = false
-    resetMessages()
-    loading = true
-    try {
-      const picked = await pickSpreadsheet()
-      if (picked) await switchTo(picked.id, picked.name)
-    } catch (caught) {
-      handleFailure(caught)
-    } finally {
-      loading = false
-    }
+    switcherOpen = false; resetMessages(); loading = true
+    try { const picked = await pickSpreadsheet(); if (picked) await switchTo(picked.id, picked.name) }
+    catch (caught) { handleFailure(caught) }
+    finally { loading = false }
   }
-
-  function sheetUrl(id: string) {
-    return 'https://docs.google.com/spreadsheets/d/' + encodeURIComponent(id) + '/edit'
-  }
+  const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${encodeURIComponent(id)}/edit`
 </script>
 
 <svelte:window onpointerdown={closeSwitcherOnOutsideClick} onkeydown={closeSwitcherOnEscape} />
-<svelte:document onfullscreenchange={syncFullscreen} />
-
-<svelte:head>
-  <title>Class Notes</title>
-  <meta name="description" content="Daily participation and observation notes, saved straight to your own Google Sheet." />
-</svelte:head>
+<svelte:head><title>Observations</title><meta name="description" content="Quick classroom observations, organized by student and subject." /></svelte:head>
 
 <div class="app-shell">
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">
-        <span></span><span></span><span></span><span></span><span></span>
-      </span>
-      <span>Class Notes</span>
-    </div>
-
+    <div class="brand"><span class="brand-mark"><ClipboardPen size={21} aria-hidden="true" /></span><span>Observations</span></div>
     {#if gradebook}
-      <nav class="topbar-actions" aria-label="Grade book actions">
-        <div class="view-switch" role="tablist" aria-label="View">
-          <button
-            class="view-tab"
-            role="tab"
-            aria-selected={view === 'roster'}
-            onclick={() => (view = 'roster')}
-            title="Today’s participation"
-          >
-            <ClipboardCheck size={18} aria-hidden="true" /><span>Today</span>
-          </button>
-          <button
-            class="view-tab"
-            role="tab"
-            aria-selected={view === 'notes'}
-            onclick={() => (view = 'notes')}
-            title="Notes"
-          >
-            <NotebookPen size={18} aria-hidden="true" /><span>Notes</span>
-            {#if gradebook.notes.length}<span class="view-count">{gradebook.notes.length}</span>{/if}
-          </button>
-        </div>
-        <a class="nav-button" href={sheetUrl(gradebook.id)} target="_blank" rel="noreferrer" title="Open sheet in Google Sheets">
-          <span>Open sheet</span><ArrowUpRight size={18} aria-hidden="true" />
-        </a>
-        <button
-          class="nav-button icon-only"
-          onclick={() => openGradebook(gradebook!.id)}
-          disabled={loading}
-          aria-label={loading ? 'Refreshing' : 'Refresh'}
-          title="Refresh"
-        >
-          <RefreshCw size={20} class={loading ? 'spin' : ''} aria-hidden="true" />
-        </button>
+      <nav class="topbar-actions" aria-label="Notebook actions">
+        <a class="nav-button" href={sheetUrl(gradebook.id)} target="_blank" rel="noreferrer"><span>Open sheet</span><ArrowUpRight size={18} /></a>
+        <button class="nav-button icon-only" onclick={() => openGradebook(gradebook!.id)} disabled={loading} aria-label="Refresh"><RefreshCw size={20} class={loading ? 'spin' : ''} /></button>
         <div class="switcher" bind:this={switcher}>
-          <button
-            class="nav-button"
-            onclick={toggleSwitcher}
-            disabled={loading}
-            title="Switch grade book"
-            aria-haspopup="menu"
-            aria-expanded={switcherOpen}
-          >
-            <ArrowLeftRight size={18} aria-hidden="true" /><span>Switch grade book</span>
-            <ChevronDown size={16} class="switcher-caret" aria-hidden="true" />
-          </button>
+          <button class="nav-button" onclick={toggleSwitcher} disabled={loading} aria-haspopup="menu" aria-expanded={switcherOpen}><ArrowLeftRight size={18} /><span>Switch class</span><ChevronDown size={16} /></button>
           {#if switcherOpen}
-            <div class="menu" role="menu" aria-label="Switch grade book">
-              {#if recent.length}
-                <p class="menu-label" aria-hidden="true">Recent</p>
-                {#each recent as sheet (sheet.id)}
-                  <button
-                    class="menu-item"
-                    role="menuitemradio"
-                    aria-checked={sheet.id === gradebook.id}
-                    onclick={() => switchTo(sheet.id, sheet.name)}
-                  >
-                    <span class="menu-check" aria-hidden="true"><Check size={18} strokeWidth={2.5} /></span>
-                    <span class="menu-text">{sheet.name || 'Untitled grade book'}</span>
-                  </button>
-                {/each}
-                <hr class="menu-divider" />
-              {/if}
-              <button class="menu-item" role="menuitem" onclick={switchViaPicker}>
-                <span class="menu-icon" aria-hidden="true"><FolderOpen size={18} /></span>
-                <span class="menu-text">Choose another sheet…</span>
-              </button>
-              <a
-                class="menu-item"
-                class:disabled={missingTemplateConfig}
-                role="menuitem"
-                href={templateCopyUrl(connection?.googleEmail)}
-                target="_blank"
-                rel="noreferrer"
-                aria-disabled={missingTemplateConfig}
-                onclick={(event) => {
-                  if (missingTemplateConfig) return event.preventDefault()
-                  switcherOpen = false
-                }}
-              >
-                <span class="menu-icon" aria-hidden="true"><CopyPlus size={18} /></span>
-                <span class="menu-text">
-                  New class from the template
-                  <small>Make a copy in Google Sheets, then choose it here.</small>
-                </span>
-                <ArrowUpRight size={16} aria-hidden="true" />
-              </a>
+            <div class="menu" role="menu" aria-label="Switch class">
+              {#each recent as sheet (sheet.id)}<button class="menu-item" role="menuitemradio" aria-checked={sheet.id === gradebook.id} onclick={() => switchTo(sheet.id, sheet.name)}><span class="menu-check"><Check size={18} /></span><span>{sheet.name}</span></button>{/each}
+              {#if recent.length}<hr class="menu-divider" />{/if}
+              <button class="menu-item" onclick={switchViaPicker}><FolderOpen size={18} /><span>Choose another notebook…</span></button>
+              <a class="menu-item" class:disabled={missingTemplateConfig} href={templateCopyUrl(connection?.googleEmail)} target="_blank" rel="noreferrer" onclick={(event) => { if (missingTemplateConfig) event.preventDefault(); else switcherOpen = false }}><CopyPlus size={18} /><span>New class from template</span></a>
             </div>
           {/if}
         </div>
-        {#if fullscreenSupported}
-          <button
-            class="nav-button icon-only"
-            onclick={toggleFullscreen}
-            aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
-            aria-pressed={fullscreen}
-            title={fullscreen ? 'Exit full screen' : 'Full screen'}
-          >
-            {#if fullscreen}<Minimize size={20} aria-hidden="true" />{:else}<Maximize size={20} aria-hidden="true" />{/if}
-          </button>
-        {/if}
-        <button class="nav-button" onclick={endSession} disabled={loading} title="Sign out">
-          <LogOut size={18} aria-hidden="true" /><span>Sign out</span>
-        </button>
+        <button class="nav-button icon-only" onclick={endSession} disabled={loading} aria-label="Sign out"><LogOut size={19} /></button>
       </nav>
     {:else if connection?.googleEmail}
-      <nav class="topbar-actions" aria-label="Account">
-        <span class="privacy-note">{connection.googleEmail}</span>
-        <button class="text-button" onclick={endSession} disabled={loading}>Sign out</button>
-      </nav>
-    {:else}
-      <span class="privacy-note">🔒 Your data stays in Google Drive</span>
-    {/if}
+      <nav class="topbar-actions"><span class="privacy-note">{connection.googleEmail}</span><button class="text-button" onclick={endSession}>Sign out</button></nav>
+    {:else}<span class="privacy-note">🔒 Notes stay in your Google Drive</span>{/if}
   </header>
 
-  {#if gradebook && view === 'notes'}
-    <main class="gradebook-view notes-view">
-      <NotesView
-        notes={gradebook.notes}
-        students={gradebook.students}
-        subjects={gradebook.subjects}
-        {loading}
-        onnew={() => newNote()}
-        onedit={editNote}
-      />
-    </main>
-    {#if error && !noteOpen}
-      <div class="toast" role="alert">
-        <span class="toast-icon" aria-hidden="true">!</span>
-        <span class="toast-text">{error}</span>
-        <button class="toast-dismiss" onclick={() => (error = '')} aria-label="Dismiss">×</button>
-      </div>
-    {/if}
-  {:else if gradebook}
-    <main class="gradebook-view">
-      <section class="page-heading" aria-labelledby="roster-heading">
-        <div class="heading-text">
-          {#if renaming}
-            <!-- The title is the Drive file name, so saving here renames the file in Google Drive. -->
-            <form class="rename-form" onsubmit={(event) => { event.preventDefault(); void saveRename() }}>
-              <input
-                bind:this={titleInput}
-                bind:value={draftTitle}
-                class="rename-input"
-                type="text"
-                aria-label="Grade book name"
-                maxlength="200"
-                required
-                disabled={saving}
-                onkeydown={(event) => event.key === 'Escape' && cancelRename()}
-              />
-              <button class="button primary rename-save" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-              <button class="button secondary rename-cancel" type="button" onclick={cancelRename} disabled={saving} aria-label="Cancel rename">
-                <X size={20} aria-hidden="true" />
-              </button>
-            </form>
-          {:else}
-            <div class="heading-title">
-              <h1 id="roster-heading">{gradebook.title}</h1>
-              <button class="rename-link" type="button" onclick={startRename} disabled={loading} title="Rename grade book">
-                <Pencil size={16} aria-hidden="true" /><span>Rename</span>
-              </button>
-            </div>
-          {/if}
-          <p class="subtext">{gradebook.dayLabel} · {gradebook.students.length} students</p>
-        </div>
-        <div class="heading-side">
-          {#if gradebook.students.length}
-            <button class="button primary new-note-button" type="button" onclick={() => newNote()} disabled={loading}>
-              <Plus size={20} aria-hidden="true" /><span>New note</span>
-            </button>
-          {/if}
-          <div class="class-total" aria-label={classPoints + ' out of ' + possiblePoints + ' class points'}>
-            <strong>{classPoints}</strong><span> / {possiblePoints}</span>
-            <small>class points</small>
-          </div>
-        </div>
-      </section>
-
-      {#if gradebook.students.length}
-        <section class="student-grid" aria-label="Student participation">
-          {#each gradebook.students as student, index (student.name)}
-            <button class="student-card" class:just-saved={justSaved === student.name} title={student.name} onclick={() => editStudent(student)}>
-              <span class={'initials color-' + ((index % 5) + 1)}>{student.initials}</span>
-              <span class="student-details">
-                <span class="student-name">{student.name}</span>
-                <span class="bubbles" aria-label={totalFor(student.grades) + ' of 5'}>
-                  {#each DIMENSIONS as dimension}
-                    <span class:on={student.grades[dimension.key]} title={dimension.label}>
-                      {dimension.emoji}
-                    </span>
-                  {/each}
-                </span>
-              </span>
-              <span class:perfect={totalFor(student.grades) === 5} class="score">
-                {totalFor(student.grades)}<small>/5</small>
-              </span>
-              <span class="chevron" aria-hidden="true">›</span>
-            </button>
-          {/each}
-        </section>
+  {#if gradebook}
+    <main class="notebook-view">
+      {#if view === 'notes'}
+        <NotesView notes={gradebook.notes} students={gradebook.students} subjects={gradebook.subjects} onedit={editNote} />
+      {:else if view === 'subjects'}
+        <SubjectsView subjects={gradebook.subjects} {saving} onadd={createSubject} onupdate={saveSubject} ondelete={removeSubject} />
       {:else}
-        <section class="empty-state">
-          <div class="empty-icon" aria-hidden="true">👋</div>
-          <h2>No students on the roster yet</h2>
-          <p>Paste your class list once and you’re ready to grade.</p>
-          <div class="empty-actions">
-            <button class="button primary" onclick={openRosterEditor} disabled={loading}>Add your roster</button>
-            <a class="button secondary" href={sheetUrl(gradebook.id)} target="_blank" rel="noreferrer">
-              <span>Edit in Google Sheets</span><ArrowUpRight size={16} aria-hidden="true" />
-            </a>
-          </div>
+        <section class="today-hero">
+          <div><p class="eyebrow">{gradebook.dayLabel}</p><h1>{gradebook.title}</h1></div>
+          <div class="today-progress"><strong>{observedToday.size}</strong><span>of {gradebook.students.length}</span><small>students noted today</small><div class="progress-track"><span style:width={(gradebook.students.length ? observedToday.size / gradebook.students.length * 100 : 0) + '%'}></span></div></div>
         </section>
+        {#if gradebook.students.length}
+          <section class="student-grid" aria-label="Students">
+            {#each gradebook.students as student, index (student.name)}
+              {@const count = todayNotes.filter((note) => note.student === student.name).length}
+              {@const hasDraft = draftStudents.has(student.name)}
+              <button class="student-card" class:just-saved={justSaved === student.name} onclick={() => newNote(student.name)}>
+                <span class={'initials color-' + ((index % 5) + 1)}>{student.initials}</span>
+                <span class="student-details"><span class="student-name">{student.name}</span><span class="student-observation-status" class:has-notes={count > 0} class:has-draft={hasDraft}>{hasDraft ? `Draft waiting${count ? ` · ${count} ${count === 1 ? 'note' : 'notes'} today` : ''}` : count ? `${count} ${count === 1 ? 'note' : 'notes'} today` : 'No notes yet today'}</span></span>
+                <span class="add-observation"><Plus size={20} /><span>{hasDraft ? 'Resume' : 'Add note'}</span></span>
+              </button>
+            {/each}
+          </section>
+        {:else}
+          <section class="empty-state"><div class="empty-icon">👋</div><h2>Add your students</h2><p>Paste your class list once, then tap a name whenever you want to save an observation.</p><button class="button primary" onclick={openRosterEditor}>Add class list</button></section>
+        {/if}
       {/if}
     </main>
-    {#if error && !selectedStudent && !rosterOpen && !noteOpen}
-      <div class="toast" role="alert">
-        <span class="toast-icon" aria-hidden="true">!</span>
-        <span class="toast-text">{error}</span>
-        <button class="toast-dismiss" onclick={() => (error = '')} aria-label="Dismiss">×</button>
-      </div>
-    {/if}
+    <nav class="bottom-nav" aria-label="Main views">
+      <button aria-current={view === 'today' ? 'page' : undefined} onclick={() => (view = 'today')}><Users size={23} /><span>Today</span></button>
+      <button aria-current={view === 'notes' ? 'page' : undefined} onclick={() => (view = 'notes')}><BookOpen size={23} /><span>All notes</span></button>
+      <button aria-current={view === 'subjects' ? 'page' : undefined} onclick={() => (view = 'subjects')}><Settings2 size={23} /><span>Subjects</span></button>
+    </nav>
+    {#if error && !noteOpen}<div class="toast" role="alert"><span class="toast-icon">!</span><span class="toast-text">{error}</span><button class="toast-dismiss" onclick={() => (error = '')} aria-label="Dismiss">×</button></div>{/if}
   {:else if autoOpening}
-    <main class="setup-view opening-view" aria-busy="true">
-      <p class="opening-note">Opening your grade book…</p>
-    </main>
+    <main class="setup-view opening-view"><p>Opening your observation notebook…</p></main>
   {:else}
     <main class="setup-view">
-      <section class="setup-intro">
-        <h1>Set up your grade book</h1>
-      </section>
-
-      {#if error}
-        <div class="banner error-banner setup-banner" role="alert"><span>!</span>{error}</div>
-      {/if}
-      {#if notice}
-        <div class="banner success-banner setup-banner" role="status"><span>✓</span>{notice}</div>
-      {/if}
-      {#if missingTemplateConfig}
-        <div class="banner error-banner setup-banner" role="alert">
-          <span>!</span>The template spreadsheet is not configured yet. Follow the README before connecting.
-        </div>
-      {/if}
-
-      <ol class="steps" aria-label="Setup steps">
-        <!-- 1. Sign in -->
-        <li class={'step ' + stepState(1)} aria-current={stepState(1) === 'current' ? 'step' : undefined}>
-          <span class="step-mark" aria-hidden="true">{signedIn ? '✓' : '1'}</span>
-          <div class="step-text">
-            <strong>{signedIn ? 'Signed in with Google' : 'Sign in with Google'}</strong>
-            <span>
-              {#if signedIn && connection?.googleEmail}
-                {connection.googleEmail}
-              {:else if session === 'checking'}
-                Checking whether you are already signed in…
-              {:else}
-                So we know which Google account to work with.
-              {/if}
-            </span>
-          </div>
-          <button class="button primary step-action" onclick={startSignIn} disabled={loading || stepState(1) !== 'current'}>
-            {signedIn ? 'Signed in' : loading && currentStep === 1 ? 'Opening Google…' : 'Sign in with Google'}
-          </button>
-        </li>
-
-        <!-- 2. Connect Drive -->
-        <li class={'step ' + stepState(2)} aria-current={stepState(2) === 'current' ? 'step' : undefined}>
-          <span class="step-mark" aria-hidden="true">{driveReady ? '✓' : '2'}</span>
-          <div class="step-text">
-            <strong>{driveReady ? 'Google Drive connected' : session === 'invalid' ? 'Reconnect Google Drive' : 'Connect Google Drive'}</strong>
-            <span>
-              {#if driveReady}
-                Access is limited to the files you pick.
-              {:else if session === 'invalid' && connection?.lastError === 'admin_policy_enforced'}
-                Your Google Workspace administrator has blocked this app. Ask them to allow it, then reconnect.
-              {:else if session === 'invalid'}
-                Google stopped accepting our access to your Drive. Reconnecting takes one click.
-              {:else}
-                Google asks permission for files you pick — nothing else in your Drive.
-              {/if}
-            </span>
-          </div>
-          <button class="button primary step-action" onclick={startConnectDrive} disabled={loading || stepState(2) !== 'current'}>
-            {driveReady ? 'Connected' : loading && currentStep === 2 ? 'Opening Google…' : session === 'invalid' ? 'Reconnect Drive' : 'Connect Drive'}
-          </button>
-        </li>
-
-        <!-- 3. Make a copy -->
-        <li class={'step ' + stepState(3)} aria-current={stepState(3) === 'current' ? 'step' : undefined}>
-          <span class="step-mark" aria-hidden="true">{stepsDone[2] ? '✓' : '3'}</span>
-          <div class="step-text">
-            <strong>{stepsDone[2] ? 'Template copied' : 'Make your copy of the template'}</strong>
-            <span>
-              {#if stepsDone[2]}
-                Your copy is in your Google Drive.
-              {:else}
-                Press <em>Make a copy</em> in the tab that opens, then come back.
-                {#if stepState(3) === 'current'}
-                  <button type="button" class="link-button" onclick={copyTemplate}>I already have a copy</button>
-                {/if}
-              {/if}
-            </span>
-          </div>
-          <a
-            class="button primary step-action"
-            class:disabled={stepState(3) !== 'current' || missingTemplateConfig}
-            href={templateCopyUrl(connection?.googleEmail)}
-            target="_blank"
-            rel="noreferrer"
-            aria-disabled={stepState(3) !== 'current' || missingTemplateConfig}
-            tabindex={stepState(3) === 'current' && !missingTemplateConfig ? 0 : -1}
-            onclick={(event) => {
-              if (stepState(3) !== 'current' || missingTemplateConfig) return event.preventDefault()
-              copyTemplate()
-            }}
-          >{stepsDone[2] ? 'Copied' : 'Make a copy ↗'}</a>
-        </li>
-
-        <!-- 4. Pick the copy -->
-        <li class={'step ' + stepState(4)} aria-current={stepState(4) === 'current' ? 'step' : undefined}>
-          <span class="step-mark" aria-hidden="true">{spreadsheet ? '✓' : '4'}</span>
-          <div class="step-text">
-            <strong>{spreadsheet ? 'Spreadsheet chosen' : 'Pick your copy'}</strong>
-            <span>
-              {#if spreadsheet}
-                {spreadsheet.name || 'Your grade book'}
-                <button type="button" class="link-button" onclick={chooseSpreadsheet} disabled={loading}>Change</button>
-              {:else}
-                We’ll check the copy has the right tabs.
-              {/if}
-            </span>
-          </div>
-          <button class="button primary step-action" onclick={chooseSpreadsheet} disabled={loading || stepState(4) !== 'current'}>
-            {spreadsheet ? 'Chosen' : loading && currentStep === 4 ? 'Opening Google…' : 'Choose spreadsheet'}
-          </button>
-        </li>
-
-        <!-- 5. Start grading -->
-        <li class={'step ' + stepState(5)} aria-current={stepState(5) === 'current' ? 'step' : undefined}>
-          <span class="step-mark" aria-hidden="true">5</span>
-          <div class="step-text">
-            <strong>Open your class</strong>
-            <span>Today’s roster and your notes, saved straight to your sheet.</span>
-          </div>
-          <button class="button primary step-action" onclick={startGrading} disabled={loading || stepState(5) !== 'current'}>
-            {loading && currentStep === 5 ? 'Opening…' : 'Open class'}
-          </button>
-        </li>
+      <section class="setup-intro"><div class="setup-mark"><ClipboardPen size={26} /></div><h1>Set up your observation notebook</h1><p>Notes go straight to a Google Sheet that only you control.</p></section>
+      {#if error}<div class="banner error-banner" role="alert"><span>!</span>{error}</div>{/if}
+      {#if notice}<div class="banner success-banner" role="status"><span>✓</span>{notice}</div>{/if}
+      {#if missingTemplateConfig}<div class="banner error-banner"><span>!</span>The new observation template has not been connected yet.</div>{/if}
+      <ol class="steps">
+        <li class={'step ' + stepState(1)}><span class="step-mark">{signedIn ? '✓' : '1'}</span><div class="step-text"><strong>{signedIn ? 'Signed in' : 'Sign in with Google'}</strong><span>{signedIn ? connection?.googleEmail : 'Use the account where you keep your class files.'}</span></div><button class="button step-action" class:primary={stepState(1) === 'current'} class:secondary={stepState(1) !== 'current'} onclick={startSignIn} disabled={loading || stepState(1) !== 'current'}>{session === 'checking' ? 'Checking…' : 'Sign in'}</button></li>
+        <li class={'step ' + stepState(2)}><span class="step-mark">{driveReady ? '✓' : '2'}</span><div class="step-text"><strong>{driveReady ? 'Google Drive connected' : 'Connect Google Drive'}</strong><span>The app can only open the sheet you choose.</span></div><button class="button step-action" class:primary={stepState(2) === 'current'} class:secondary={stepState(2) !== 'current'} onclick={startConnectDrive} disabled={loading || stepState(2) !== 'current'}>{session === 'invalid' ? 'Reconnect' : 'Connect'}</button></li>
+        <li class={'step ' + stepState(3)}><span class="step-mark">{stepsDone[2] ? '✓' : '3'}</span><div class="step-text"><strong>{stepsDone[2] ? 'Template copied' : 'Make your notebook'}</strong><span>Make a private copy of the three-tab observation template.</span></div><a class="button step-action" class:primary={stepState(3) === 'current'} class:secondary={stepState(3) !== 'current'} class:disabled={stepState(3) !== 'current' || missingTemplateConfig} href={templateCopyUrl(connection?.googleEmail)} target="_blank" rel="noreferrer" onclick={(event) => { if (stepState(3) !== 'current' || missingTemplateConfig) event.preventDefault(); else copyTemplate() }}>Make a copy</a></li>
+        <li class={'step ' + stepState(4)}><span class="step-mark">{stepsDone[3] ? '✓' : '4'}</span><div class="step-text"><strong>{stepsDone[3] ? 'Notebook selected' : 'Choose your copy'}</strong><span>{spreadsheet?.name || 'Pick the copy you just made.'}</span></div><button class="button step-action" class:primary={stepState(4) === 'current'} class:secondary={stepState(4) !== 'current'} onclick={chooseSpreadsheet} disabled={loading || stepState(4) !== 'current'}>Choose notebook</button></li>
+        <li class={'step ' + stepState(5)}><span class="step-mark">5</span><div class="step-text"><strong>Start taking notes</strong><span>Your class list, subjects, and observations will stay in this sheet.</span></div><button class="button primary step-action" onclick={openNotebook} disabled={loading || stepState(5) !== 'current'}>Open notebook</button></li>
       </ol>
-
-      <p class="privacy-line">🔒 The app can access only the file you choose. Student data is never sent to an app server.</p>
     </main>
   {/if}
 </div>
 
-<dialog
-  bind:this={rosterModal}
-  class="roster-modal"
-  onclose={() => (rosterOpen = false)}
-  onclick={(event) => event.target === event.currentTarget && !saving && rosterModal.close()}
->
-  <form method="dialog">
-    <button class="modal-close" value="cancel" aria-label="Close" disabled={saving}><X size={22} aria-hidden="true" /></button>
+{#if gradebook}
+  <NoteEditor bind:this={noteEditor} notebookId={gradebook.id} subjects={gradebook.subjects} timeZone={gradebook.timeZone} {saving} {error} onsave={saveNotes} onupdate={saveNoteEdit} ondelete={removeNote} ondraftchange={updateDraftStudent} onopenchange={(open) => (noteOpen = open)} />
+{/if}
 
-    <header class="modal-heading roster-heading">
-      <div>
-        <p class="eyebrow">Class roster</p>
-        <h2>Add your students</h2>
-      </div>
-    </header>
-
-    <label class="roster-label" for="roster-names">One name per line. Paste straight from a class list or spreadsheet column.</label>
-    <textarea
-      id="roster-names"
-      bind:this={rosterTextarea}
-      bind:value={rosterText}
-      class="roster-textarea"
-      rows="10"
-      placeholder={'Ava Martinez\nBen Okafor\nChloe Nguyen'}
-      disabled={saving}
-      autocomplete="off"
-      autocapitalize="words"
-      spellcheck="false"
-    ></textarea>
-    <p class="roster-count" aria-live="polite">
-      {#if rosterNames.length}
-        {rosterNames.length} {rosterNames.length === 1 ? 'student' : 'students'} will be added
-      {:else}
-        &nbsp;
-      {/if}
-    </p>
-
-    <p class="privacy-callout">
-      <Lock size={16} aria-hidden="true" />
-      <span>No student data ever leaves your Google Drive or this device. Names are written straight to your own sheet.</span>
-    </p>
-
-    {#if error}<p class="modal-error" role="alert">{error}</p>{/if}
-
-    <footer class="modal-actions">
-      <button class="button secondary" value="cancel" disabled={saving}>Cancel</button>
-      <button class="button primary" type="button" onclick={saveRoster} disabled={saving || !rosterNames.length}>
-        {saving ? 'Adding…' : rosterNames.length ? `Add ${rosterNames.length} ${rosterNames.length === 1 ? 'student' : 'students'}` : 'Add students'}
-      </button>
-    </footer>
+<dialog bind:this={rosterModal} class="roster-modal" onclose={() => (rosterOpen = false)} onclick={(event) => event.target === event.currentTarget && !saving && rosterModal.close()}>
+  <form method="dialog" onsubmit={(event) => { event.preventDefault(); void saveRoster() }}>
+    <button class="modal-close" type="button" onclick={() => rosterModal.close()}><X size={22} /></button>
+    <header class="modal-heading"><div><p class="eyebrow">Class list</p><h2>Add your students</h2></div></header>
+    <label class="roster-label" for="roster">Paste one name per line</label>
+    <textarea id="roster" bind:this={rosterTextarea} bind:value={rosterText} class="roster-textarea" placeholder={'Ava Martinez\nBen Okafor\nChloe Nguyen'}></textarea>
+    <p class="roster-count">{rosterNames.length ? `${rosterNames.length} ${rosterNames.length === 1 ? 'student' : 'students'} ready to add` : ''}</p>
+    {#if error}<p class="modal-error">{error}</p>{/if}
+    <footer class="modal-actions"><button class="button secondary" type="button" onclick={() => rosterModal.close()}>Cancel</button><button class="button primary" type="submit" disabled={!rosterNames.length || saving}>{saving ? 'Adding…' : 'Add students'}</button></footer>
   </form>
 </dialog>
-
-<dialog
-  bind:this={modal}
-  class="grade-modal"
-  onclose={() => (selectedStudent = null)}
-  onclick={(event) => event.target === event.currentTarget && modal.close()}
->
-  {#if selectedStudent && draftGrades}
-    <form method="dialog">
-      <button class="modal-close" value="cancel" aria-label="Close grade editor"><X size={22} aria-hidden="true" /></button>
-
-      <header class="modal-heading">
-        <div class="initials modal-initials">{selectedStudent.initials}</div>
-        <div>
-          <p class="eyebrow">Today’s grade</p>
-          <h2>{selectedStudent.name}</h2>
-        </div>
-        <div class="modal-score" aria-live="polite">
-          <strong>{totalFor(draftGrades)}</strong><span>/5</span>
-        </div>
-      </header>
-
-      <fieldset class="dimensions">
-        <legend>Tap each habit that applied today</legend>
-        <div class="dimension-tiles">
-          {#each DIMENSIONS as dimension}
-            <button
-              type="button"
-              class:checked={draftGrades[dimension.key]}
-              class="dimension-tile"
-              onclick={() => toggleDimension(dimension.key)}
-              aria-pressed={draftGrades[dimension.key]}
-            >
-              <span class="tile-check" aria-hidden="true"><Check size={16} strokeWidth={3} /></span>
-              <span class="dimension-emoji">{dimension.emoji}</span>
-              <span class="dimension-copy">
-                <strong>{dimension.label}</strong>
-                <small>{dimension.description}</small>
-              </span>
-            </button>
-          {/each}
-        </div>
-      </fieldset>
-
-      <button class="note-shortcut" type="button" onclick={noteAboutSelected} disabled={saving}>
-        <NotebookPen size={18} aria-hidden="true" />
-        <span>Write a note about {selectedStudent.name.split(' ')[0]}</span>
-      </button>
-
-      {#if error}<p class="modal-error" role="alert">{error}</p>{/if}
-
-      <footer class="modal-actions">
-        <button class="button secondary" value="cancel" disabled={saving}>Cancel</button>
-        <button class="button primary" type="button" onclick={saveGrade} disabled={saving}>
-          {saving ? 'Saving…' : 'Save grade'}
-        </button>
-      </footer>
-    </form>
-  {/if}
-</dialog>
-
-{#if gradebook}
-  <NoteEditor
-    bind:this={noteEditor}
-    students={gradebook.students}
-    subjects={gradebook.subjects}
-    todayKey={gradebook.dayKey}
-    {saving}
-    {error}
-    onsave={saveNotes}
-    onupdate={saveNoteEdit}
-    ondelete={removeNote}
-    onaddsubject={createSubject}
-    onopenchange={(open) => (noteOpen = open)}
-  />
-{/if}

@@ -1,11 +1,11 @@
 {
-  "name": "Class Notes",
-  "short_name": "Class Notes",
-  "description": "Daily participation and observation notes, saved straight to your own Google Sheet.",
+  "name": "Observations",
+  "short_name": "Observations",
+  "description": "Quick classroom observations, organized by student and subject.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f6f8fc",
-  "theme_color": "#ffffff",
+  "background_color": "#f7f6f1",
+  "theme_color": "#e8c66a",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
