@@ -1,10 +1,12 @@
+// Unfinished notes, one per student per class, so closing the editor never loses text.
+
 export interface SavedNoteDraft {
   subject: string
   text: string
   timestamp: string
 }
 
-const prefix = 'observations-v2.draft:'
+const prefix = 'observations-local.draft:'
 
 function key(notebookId: string, student: string) {
   return `${prefix}${encodeURIComponent(notebookId)}:${encodeURIComponent(student)}`
@@ -37,6 +39,19 @@ export function removeDraft(notebookId: string, student: string): void {
     localStorage.removeItem(key(notebookId, student))
   } catch {
     // Nothing else to clear.
+  }
+}
+
+/** Drops every draft belonging to a class; used when the class itself is deleted. */
+export function removeDraftsFor(notebookId: string): void {
+  const own = `${prefix}${encodeURIComponent(notebookId)}:`
+  try {
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const entry = localStorage.key(index)
+      if (entry?.startsWith(own)) localStorage.removeItem(entry)
+    }
+  } catch {
+    // Storage is unavailable, so there is nothing to clear.
   }
 }
 

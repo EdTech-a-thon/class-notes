@@ -6,23 +6,21 @@
   import Trash from '@lucide/svelte/icons/trash'
   import X from '@lucide/svelte/icons/x'
   import { readDraft, removeDraft, writeDraft } from './lib/drafts'
-  import { timestampNow, type NoteDraft } from './lib/sheets'
-  import type { Note, Subject } from './lib/types'
+  import { timestampNow } from './lib/time'
+  import type { Note, NoteDraft, Subject } from './lib/types'
 
   interface Props {
     notebookId: string
     subjects: Subject[]
-    timeZone: string
-    saving: boolean
     error: string
-    onsave: (drafts: NoteDraft[]) => Promise<boolean>
-    onupdate: (note: Note) => Promise<boolean>
-    ondelete: (note: Note) => Promise<boolean>
+    onsave: (drafts: NoteDraft[]) => boolean
+    onupdate: (note: Note) => boolean
+    ondelete: (note: Note) => boolean
     ondraftchange?: (student: string, hasDraft: boolean) => void
     onopenchange?: (open: boolean) => void
   }
 
-  let { notebookId, subjects, timeZone, saving, error, onsave, onupdate, ondelete, ondraftchange, onopenchange }: Props = $props()
+  let { notebookId, subjects, error, onsave, onupdate, ondelete, ondraftchange, onopenchange }: Props = $props()
   let dialog: HTMLDialogElement
   let textarea: HTMLTextAreaElement | undefined
   let editing = $state<Note | null>(null)
@@ -35,7 +33,7 @@
   let draftStatus = $state('')
   let confirmingDelete = $state(false)
 
-  const canSave = $derived(!!student && !!subject && !!text.trim() && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(timestamp) && !saving)
+  const canSave = $derived(!!student && !!subject && !!text.trim() && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(timestamp))
   const straySubject = $derived(editing && !subjects.some((entry) => entry.name === editing!.subject) ? editing.subject : '')
 
   $effect(() => {
@@ -63,7 +61,7 @@
     const saved = readDraft(notebookId, selectedStudent)
     subject = saved?.subject && subjects.some((entry) => entry.name === saved.subject) ? saved.subject : ''
     text = saved?.text ?? ''
-    timestamp = saved?.timestamp || timestampNow(timeZone)
+    timestamp = saved?.timestamp || timestampNow()
     draftStatus = saved && (subject || saved.text.trim()) ? 'Draft restored' : ''
     dialog.showModal()
     isOpen = true
@@ -78,7 +76,7 @@
     student = note.student
     subject = note.subject
     text = note.text
-    timestamp = note.timestamp || timestampNow(timeZone)
+    timestamp = note.timestamp || timestampNow()
     draftStatus = ''
     confirmingDelete = false
     readyToDraft = false
@@ -96,23 +94,23 @@
   }
 
   function close() {
-    if (!saving) dialog.close()
+    dialog.close()
   }
 
   function clearDraft() {
     subject = ''
     text = ''
-    timestamp = timestampNow(timeZone)
+    timestamp = timestampNow()
     draftStatus = ''
     removeDraft(notebookId, student)
     ondraftchange?.(student, false)
     void tick().then(() => textarea?.focus())
   }
 
-  async function save() {
+  function save() {
     if (!canSave) return
     const draft = { student, subject, text: text.trim(), timestamp }
-    const ok = editing ? await onupdate({ ...editing, ...draft }) : await onsave([draft])
+    const ok = editing ? onupdate({ ...editing, ...draft }) : onsave([draft])
     if (ok) {
       if (!editing) {
         removeDraft(notebookId, student)
@@ -122,19 +120,19 @@
     }
   }
 
-  async function remove() {
+  function remove() {
     if (!editing) return
     if (!confirmingDelete) {
       confirmingDelete = true
       return
     }
-    if (await ondelete(editing)) dialog.close()
+    if (ondelete(editing)) dialog.close()
   }
 
   function onKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault()
-      void save()
+      save()
     }
   }
 </script>
@@ -148,17 +146,17 @@
       </div>
       <div class="composer-heading-actions">
         {#if !editing}
-          <button class="clear-draft" type="button" onclick={clearDraft} disabled={saving || (!subject && !text.trim())}><RotateCcw size={18} /><span>Clear</span></button>
+          <button class="clear-draft" type="button" onclick={clearDraft} disabled={!subject && !text.trim()}><RotateCcw size={18} /><span>Clear</span></button>
         {/if}
-        <button class="modal-close-inline" type="button" onclick={close} aria-label="Close note editor" disabled={saving}><X size={23} /></button>
+        <button class="modal-close-inline" type="button" onclick={close} aria-label="Close note editor"><X size={23} /></button>
       </div>
     </header>
 
     <fieldset class="subject-picker">
       <legend>Subject or topic</legend>
       <div class="subject-tiles">
-        {#each subjects as entry (entry.row)}
-          <button type="button" class="subject-tile" class:selected={subject === entry.name} aria-pressed={subject === entry.name} onclick={() => (subject = entry.name)} disabled={saving}>
+        {#each subjects as entry (entry.id)}
+          <button type="button" class="subject-tile" class:selected={subject === entry.name} aria-pressed={subject === entry.name} onclick={() => (subject = entry.name)}>
             <span class="subject-tile-emoji" aria-hidden="true">{entry.emoji || '•'}</span>
             <span>{entry.name}</span>
             <span class="subject-tile-check" aria-hidden="true"><Check size={17} strokeWidth={3} /></span>
@@ -170,18 +168,18 @@
     </fieldset>
 
     <label class="note-label" for="note-text">What did you notice?</label>
-    <textarea id="note-text" bind:this={textarea} bind:value={text} class="note-textarea" rows="5" placeholder="Shared the toy car with a friend and let them choose the car." disabled={saving} autocapitalize="sentences" onkeydown={onKeydown}></textarea>
+    <textarea id="note-text" bind:this={textarea} bind:value={text} class="note-textarea" rows="5" placeholder="Shared the toy car with a friend and let them choose the car." autocapitalize="sentences" onkeydown={onKeydown}></textarea>
 
     <div class="composer-meta">
-      <label class="date-field"><span><Clock size={18} aria-hidden="true" /> Date and time</span><input type="datetime-local" bind:value={timestamp} required disabled={saving} /></label>
+      <label class="date-field"><span><Clock size={18} aria-hidden="true" /> Date and time</span><input type="datetime-local" bind:value={timestamp} required /></label>
       {#if draftStatus}<p class="draft-status"><Check size={16} /> {draftStatus}</p>{/if}
     </div>
 
     {#if error}<p class="modal-error" role="alert">{error}</p>{/if}
     <footer class="modal-actions note-actions" class:with-delete={!!editing}>
-      {#if editing}<button class="button danger" type="button" onclick={remove} disabled={saving}><Trash size={18} /><span>{confirmingDelete ? 'Delete for sure?' : 'Delete'}</span></button>{/if}
-      <button class="button secondary" type="button" onclick={close} disabled={saving}>Close</button>
-      <button class="button primary save-note" type="button" onclick={save} disabled={!canSave}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Save note'}</button>
+      {#if editing}<button class="button danger" type="button" onclick={remove}><Trash size={18} /><span>{confirmingDelete ? 'Delete for sure?' : 'Delete'}</span></button>{/if}
+      <button class="button secondary" type="button" onclick={close}>Close</button>
+      <button class="button primary save-note" type="button" onclick={save} disabled={!canSave}>{editing ? 'Save changes' : 'Save note'}</button>
     </footer>
   </form>
 </dialog>

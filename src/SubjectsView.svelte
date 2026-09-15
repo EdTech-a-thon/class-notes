@@ -6,20 +6,19 @@
 
   interface Props {
     subjects: Subject[]
-    saving: boolean
-    onadd: (subject: Omit<Subject, 'row'>) => Promise<boolean>
-    onupdate: (subject: Subject) => Promise<boolean>
-    ondelete: (subject: Subject) => Promise<boolean>
+    onadd: (subject: Omit<Subject, 'id'>) => boolean
+    onupdate: (subject: Subject) => boolean
+    ondelete: (subject: Subject) => boolean
   }
-  let { subjects, saving, onadd, onupdate, ondelete }: Props = $props()
+  let { subjects, onadd, onupdate, ondelete }: Props = $props()
   let name = $state('')
   let emoji = $state('')
   let justAdded = $state(false)
 
-  async function add() {
+  function add() {
     const clean = name.trim().replace(/\s+/g, ' ')
     if (!clean || subjects.some((subject) => subject.name.toLowerCase() === clean.toLowerCase())) return
-    if (await onadd({ name: clean, emoji: emoji.trim() })) {
+    if (onadd({ name: clean, emoji: emoji.trim() })) {
       name = ''
       emoji = ''
       justAdded = true
@@ -32,15 +31,15 @@
   <div class="heading-text"><p class="eyebrow">Your filing system</p><h1>Subjects & topics</h1><p class="subtext">These are the choices that appear when you write a note.</p></div>
 </section>
 
-<form class="subject-add" onsubmit={(event) => { event.preventDefault(); void add() }}>
+<form class="subject-add" onsubmit={(event) => { event.preventDefault(); add() }}>
   <label><span>Emoji <small>optional</small></span><input class="emoji-input" bind:value={emoji} maxlength="4" placeholder="🌱" aria-label="Subject emoji" /></label>
   <label><span>Subject or topic</span><input bind:value={name} maxlength="60" placeholder="Outdoor learning" aria-label="New subject name" /></label>
-  <button class="button primary" type="submit" disabled={saving || !name.trim()}>{#if justAdded}<Check size={18} /> Added{:else}<Plus size={18} /> Add subject{/if}</button>
+  <button class="button primary" type="submit" disabled={!name.trim()}>{#if justAdded}<Check size={18} /> Added{:else}<Plus size={18} /> Add subject{/if}</button>
 </form>
 
 <div class="subject-list">
-  {#each subjects as subject (subject.row)}
-    <SubjectRow {subject} {subjects} {saving} {onupdate} {ondelete} />
+  {#each subjects as subject (subject.id)}
+    <SubjectRow {subject} {subjects} {onupdate} {ondelete} />
   {/each}
 </div>
 

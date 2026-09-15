@@ -3,7 +3,7 @@
   import Copy from '@lucide/svelte/icons/copy'
   import Search from '@lucide/svelte/icons/search'
   import X from '@lucide/svelte/icons/x'
-  import { formatTimestamp } from './lib/sheets'
+  import { formatTimestamp } from './lib/time'
   import type { Note, Student, Subject } from './lib/types'
 
   interface Props {
@@ -28,7 +28,7 @@
       .filter((note) => !subjectFilter || note.subject === subjectFilter)
       .filter((note) => !needle || note.text.toLowerCase().includes(needle))
       .slice()
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp) || b.row - a.row)
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp) || b.id - a.id)
   })
   const groupBy = $derived(studentFilter ? 'subject' : 'student')
   const groups = $derived.by(() => {
@@ -100,7 +100,7 @@
           </button>
         </header>
         <ul class="note-list">
-          {#each group.notes as note (note.row)}
+          {#each group.notes as note (note.id)}
             <li><button class="note-card" type="button" onclick={() => onedit(note)}>
               <span class="note-topline"><time datetime={note.timestamp}>{formatTimestamp(note.timestamp)}</time><span class="note-tag">{groupBy === 'student' ? subjectLabel(note.subject) : note.student}</span></span>
               <span class="note-text">{note.text}</span>
