@@ -197,7 +197,7 @@
   {#if notebook && !creating}
     <main class="notebook-view">
       {#if view === 'notes'}
-        <NotesView notes={notebook.notes} students={notebook.students} categories={notebook.categories} onedit={editNote} />
+        <NotesView title={notebook.title} notes={notebook.notes} students={notebook.students} categories={notebook.categories} onedit={editNote} />
       {:else if view === 'categories'}
         <CategoriesView categories={notebook.categories} isDefault={categoriesAreDefault} onadd={createCategory} onupdate={saveCategory} ondelete={removeCategory} onmakedefault={makeCategoriesDefault} />
       {:else}

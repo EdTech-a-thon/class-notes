@@ -1,19 +1,22 @@
 <script lang="ts">
   import Check from '@lucide/svelte/icons/check'
   import Copy from '@lucide/svelte/icons/copy'
+  import Download from '@lucide/svelte/icons/download'
   import Search from '@lucide/svelte/icons/search'
   import X from '@lucide/svelte/icons/x'
+  import { csvFilename, downloadCsv, notesToCsv } from './lib/csv'
   import { formatTimestamp } from './lib/time'
   import type { Note, Student, Category } from './lib/types'
 
   interface Props {
+    title: string
     notes: Note[]
     students: Student[]
     categories: Category[]
     onedit: (note: Note) => void
   }
 
-  let { notes, students, categories, onedit }: Props = $props()
+  let { title, notes, students, categories, onedit }: Props = $props()
   let studentFilter = $state('')
   let categoryFilter = $state('')
   let query = $state('')
@@ -53,6 +56,9 @@
     query = ''
   }
 
+  /** Exports whatever the filters currently show, so a single student's notes can be pulled on their own. */
+  const exportCsv = () => downloadCsv(csvFilename(activeFilters ? `${title} ${studentFilter || categoryFilter || query}` : title), notesToCsv(filtered))
+
   async function copyGroup(key: string, groupNotes: Note[]) {
     const heading = groupBy === 'student' ? key : `${studentFilter} — ${key}`
     const lines = groupNotes.map((note) => `${formatTimestamp(note.timestamp)} · ${groupBy === 'student' ? note.category : note.student}: ${note.text}`)
@@ -72,6 +78,7 @@
     <h1>All observations</h1>
     <p class="subtext">Choose a student to see their notes grouped by category.</p>
   </div>
+  {#if filtered.length}<button class="button secondary export-button" type="button" onclick={exportCsv}><Download size={18} /><span>Export CSV{activeFilters ? ` (${filtered.length})` : ''}</span></button>{/if}
 </section>
 
 {#if notes.length}
