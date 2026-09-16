@@ -1,7 +1,7 @@
 // Everything the app knows lives in this browser's localStorage. There is no server and no
 // account: one entry per class, an index of classes, and which class is open.
 
-import { removeDraftsFor } from './drafts'
+import { removeDraft, removeDraftsFor } from './drafts'
 import { DEFAULT_CATEGORIES, type Note, type NoteDraft, type Notebook, type NotebookSummary, type Student, type Category } from './types'
 
 const INDEX_KEY = 'observations-local.notebooks'
@@ -169,6 +169,15 @@ export function addStudents(notebook: Notebook, names: string[]): Notebook {
   if (!names.length) return notebook
   const added = assignIds<Student>(notebook, names.map((name) => ({ name, initials: deriveInitials(name) })))
   return saveNotebook({ ...notebook, students: [...notebook.students, ...added.items], nextId: added.nextId })
+}
+
+/** Takes a student off the roster. Their notes stay in the class so nothing written is lost. */
+export function removeStudent(notebook: Notebook, id: number): Notebook {
+  const student = notebook.students.find((entry) => entry.id === id)
+  if (!student) return notebook
+  const saved = saveNotebook({ ...notebook, students: notebook.students.filter((entry) => entry.id !== id) })
+  removeDraft(notebook.id, student.name)
+  return saved
 }
 
 export function addNotes(notebook: Notebook, drafts: NoteDraft[]): { notebook: Notebook; added: Note[] } {

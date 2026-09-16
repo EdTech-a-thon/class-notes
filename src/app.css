@@ -221,6 +221,12 @@ h1, h2, p { margin-top: 0; }
 .note-label { margin-top: 22px; }
 .note-textarea, .roster-textarea { width: 100%; min-height: 145px; padding: 14px 15px; border: 2px solid var(--line); border-radius: 13px; color: var(--ink); background: #fff; font-size: 1.04rem; line-height: 1.55; resize: vertical; }
 .roster-textarea { min-height: 220px; }
+.roster-list { max-height: 38vh; margin: 16px 0 8px; padding: 2px; overflow: auto; list-style: none; display: grid; gap: 7px; }
+.roster-row { padding: 6px 6px 6px 8px; border: 1px solid var(--line); border-radius: 13px; background: #fff; display: grid; grid-template-columns: 40px minmax(0,1fr) auto; align-items: center; gap: 10px; }
+.roster-initials { width: 40px; height: 40px; border-radius: 12px; font-size: .74rem; }
+.roster-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 720; }
+.roster-modal .roster-help { margin: 0 0 18px; }
+.roster-modal .roster-list ~ .roster-textarea, .roster-modal .roster-help ~ .roster-textarea { min-height: 120px; }
 .date-field { margin-top: 14px; max-width: 330px; display: flex; flex-direction: column; gap: 7px; }
 .date-field > span { color: var(--muted); font-size: .83rem; font-weight: 760; display: flex; align-items: center; gap: 6px; }
 .date-field input { min-height: 46px; padding: 0 12px; border: 2px solid var(--line); border-radius: 11px; color: var(--ink); background: #fff; }

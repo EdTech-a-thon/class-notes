@@ -13,11 +13,11 @@
   import { studentsWithDrafts } from './lib/drafts'
   import {
     addNotes, addStudents, addCategory, createNotebook, deleteNote, deleteNotebook, deleteCategory,
-    getCurrentNotebookId, isDefaultCategories, listNotebooks, loadNotebook, parseRosterNames, saveDefaultCategories,
+    getCurrentNotebookId, isDefaultCategories, listNotebooks, loadNotebook, parseRosterNames, removeStudent, saveDefaultCategories,
     setCurrentNotebook, updateNote, updateCategory,
   } from './lib/notebook'
   import { today } from './lib/time'
-  import type { Note, NoteDraft, Notebook, NotebookSummary, Category } from './lib/types'
+  import type { Note, NoteDraft, Notebook, NotebookSummary, Category, Student } from './lib/types'
   import NoteEditor from './NoteEditor.svelte'
   import NotesView from './NotesView.svelte'
   import CategoriesView from './CategoriesView.svelte'
@@ -37,6 +37,8 @@
   let rosterModal: HTMLDialogElement
   let rosterTextarea: HTMLTextAreaElement | undefined
   let rosterText = ''
+  /** Student whose remove button was tapped once; a second tap removes them. */
+  let confirmingRemoval: number | null = null
   let noteEditor: any
   let noteOpen = false
   let justSaved = ''
@@ -45,7 +47,8 @@
   let defaultsVersion = 0
 
   $: todayNotes = notebook?.notes.filter((note) => note.timestamp.slice(0, 10) === day.key) ?? []
-  $: observedToday = new Set(todayNotes.map((note) => note.student))
+  // Only students still on the roster count, so removing one keeps the progress bar honest.
+  $: observedToday = new Set(todayNotes.map((note) => note.student).filter((name) => notebook?.students.some((student) => student.name === name)))
   $: rosterNames = parseRosterNames(rosterText, notebook?.students.map((student) => student.name) ?? [])
   $: setupNames = parseRosterNames(setupText)
   // `defaultsVersion` is bumped after saving so this re-reads the stored default set.
@@ -113,12 +116,20 @@
   }
 
   async function openRosterEditor() {
-    rosterText = ''; error = ''; rosterModal.showModal(); await tick(); rosterTextarea?.focus()
+    rosterText = ''; error = ''; confirmingRemoval = null; rosterModal.showModal()
+    if (!notebook?.students.length) { await tick(); rosterTextarea?.focus() }
   }
   function saveRoster() {
     if (!notebook || !rosterNames.length) return
     const book = notebook
     if (commit(() => addStudents(book, rosterNames))) rosterModal.close()
+  }
+  function dropStudent(student: Student) {
+    if (confirmingRemoval !== student.id) { confirmingRemoval = student.id; return }
+    if (!notebook) return
+    const book = notebook
+    confirmingRemoval = null
+    if (commit(() => removeStudent(book, student.id))) updateDraftStudent(student.name, false)
   }
 
   function flashSaved(name: string) {
@@ -205,7 +216,7 @@
                 <span class="add-observation"><Plus size={20} /><span>{hasDraft ? 'Resume' : 'Add note'}</span></span>
               </button>
             {/each}
-            <button class="student-card add-students-card" onclick={openRosterEditor}><span class="initials add-students-mark"><Plus size={22} /></span><span class="student-details"><span class="student-name">Add students</span><span class="student-observation-status">Paste more names</span></span></button>
+            <button class="student-card add-students-card" onclick={openRosterEditor}><span class="initials add-students-mark"><Plus size={22} /></span><span class="student-details"><span class="student-name">Edit class list</span><span class="student-observation-status">Add or remove students</span></span></button>
           </section>
         {:else}
           <section class="empty-state"><div class="empty-icon">👋</div><h2>Add your students</h2><p>Paste your class list once, then tap a name whenever you want to save an observation.</p><button class="button primary" onclick={openRosterEditor}>Add class list</button></section>
@@ -242,11 +253,23 @@
 <dialog bind:this={rosterModal} class="roster-modal" onclick={(event) => event.target === event.currentTarget && rosterModal.close()}>
   <form method="dialog" onsubmit={(event) => { event.preventDefault(); saveRoster() }}>
     <button class="modal-close" type="button" onclick={() => rosterModal.close()}><X size={22} /></button>
-    <header class="modal-heading"><div><p class="eyebrow">Class list</p><h2>Add your students</h2></div></header>
-    <label class="roster-label" for="roster">Paste one name per line</label>
+    <header class="modal-heading"><div><p class="eyebrow">Class list</p><h2>{notebook?.students.length ? 'Your students' : 'Add your students'}</h2></div></header>
+    {#if notebook?.students.length}
+      <ul class="roster-list" aria-label="Current students">
+        {#each notebook.students as student, index (student.id)}
+          <li class="roster-row">
+            <span class={'initials roster-initials color-' + ((index % 5) + 1)}>{student.initials}</span>
+            <span class="roster-name">{student.name}</span>
+            <button class="icon-action delete-action" class:confirming={confirmingRemoval === student.id} type="button" onclick={() => dropStudent(student)} aria-label={(confirmingRemoval === student.id ? 'Confirm remove ' : 'Remove ') + student.name}><Trash size={18} /><span>{confirmingRemoval === student.id ? 'Confirm' : ''}</span></button>
+          </li>
+        {/each}
+      </ul>
+      <p class="field-help roster-help">Removing a student keeps the notes you've already written about them in All notes.</p>
+    {/if}
+    <label class="roster-label" for="roster">{notebook?.students.length ? 'Add more students, one name per line' : 'Paste one name per line'}</label>
     <textarea id="roster" bind:this={rosterTextarea} bind:value={rosterText} class="roster-textarea" placeholder={'Ava Martinez\nBen Okafor\nChloe Nguyen'}></textarea>
     <p class="roster-count">{rosterNames.length ? `${rosterNames.length} ${rosterNames.length === 1 ? 'student' : 'students'} ready to add` : ''}</p>
     {#if error}<p class="modal-error">{error}</p>{/if}
-    <footer class="modal-actions"><button class="button secondary" type="button" onclick={() => rosterModal.close()}>Cancel</button><button class="button primary" type="submit" disabled={!rosterNames.length}>Add students</button></footer>
+    <footer class="modal-actions"><button class="button secondary" type="button" onclick={() => rosterModal.close()}>{notebook?.students.length ? 'Done' : 'Cancel'}</button><button class="button primary" type="submit" disabled={!rosterNames.length}>Add students</button></footer>
   </form>
 </dialog>
