@@ -13,7 +13,8 @@
   import { studentsWithDrafts } from './lib/drafts'
   import {
     addNotes, addStudents, addCategory, createNotebook, deleteNote, deleteNotebook, deleteCategory,
-    getCurrentNotebookId, listNotebooks, loadNotebook, parseRosterNames, setCurrentNotebook, updateNote, updateCategory,
+    getCurrentNotebookId, isDefaultCategories, listNotebooks, loadNotebook, parseRosterNames, saveDefaultCategories,
+    setCurrentNotebook, updateNote, updateCategory,
   } from './lib/notebook'
   import { today } from './lib/time'
   import type { Note, NoteDraft, Notebook, NotebookSummary, Category } from './lib/types'
@@ -41,11 +42,14 @@
   let justSaved = ''
   let justSavedTimer: ReturnType<typeof setTimeout> | undefined
   let draftStudents = new Set<string>()
+  let defaultsVersion = 0
 
   $: todayNotes = notebook?.notes.filter((note) => note.timestamp.slice(0, 10) === day.key) ?? []
   $: observedToday = new Set(todayNotes.map((note) => note.student))
   $: rosterNames = parseRosterNames(rosterText, notebook?.students.map((student) => student.name) ?? [])
   $: setupNames = parseRosterNames(setupText)
+  // `defaultsVersion` is bumped after saving so this re-reads the stored default set.
+  $: categoriesAreDefault = !!notebook && defaultsVersion >= 0 && isDefaultCategories(notebook.categories)
 
   onMount(() => {
     classes = listNotebooks()
@@ -138,6 +142,18 @@
   const createCategory = (category: Omit<Category, 'id'>) => !!notebook && commit(() => addCategory(notebook!, category))
   const saveCategory = (category: Category) => !!notebook && commit(() => updateCategory(notebook!, category))
   const removeCategory = (category: Category) => !!notebook && commit(() => deleteCategory(notebook!, category.id))
+  function makeCategoriesDefault(): boolean {
+    if (!notebook) return false
+    error = ''
+    try {
+      saveDefaultCategories(notebook.categories)
+      defaultsVersion += 1
+      return true
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : 'Something went wrong. Please try again.'
+      return false
+    }
+  }
 
   function toggleSwitcher() { if (!switcherOpen) classes = listNotebooks(); switcherOpen = !switcherOpen }
   function closeSwitcherOnOutsideClick(event: PointerEvent) { if (switcherOpen && switcher && !switcher.contains(event.target as Node)) switcherOpen = false }
@@ -172,7 +188,7 @@
       {#if view === 'notes'}
         <NotesView notes={notebook.notes} students={notebook.students} categories={notebook.categories} onedit={editNote} />
       {:else if view === 'categories'}
-        <CategoriesView categories={notebook.categories} onadd={createCategory} onupdate={saveCategory} ondelete={removeCategory} />
+        <CategoriesView categories={notebook.categories} isDefault={categoriesAreDefault} onadd={createCategory} onupdate={saveCategory} ondelete={removeCategory} onmakedefault={makeCategoriesDefault} />
       {:else}
         <section class="today-hero">
           <div><p class="eyebrow">{day.label}</p><h1>{notebook.title}</h1></div>

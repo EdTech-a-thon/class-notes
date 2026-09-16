@@ -155,6 +155,8 @@ h1, h2, p { margin-top: 0; }
 .note-tag { padding: 4px 8px; border-radius: 8px; color: #744c00; background: var(--blue-soft); font-size: .74rem; font-weight: 760; }
 .note-text { color: #2e3a50; font-size: .97rem; line-height: 1.55; white-space: pre-wrap; display: block; }
 
+.default-status { margin: 0; padding: 10px 14px; border-radius: 999px; color: #2f6b3a; background: #e8f5ea; font-size: .9rem; font-weight: 750; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.default-button { white-space: nowrap; }
 .category-add { margin-bottom: 18px; padding: 17px; border: 1px solid var(--line); border-radius: 17px; background: #fff; display: grid; grid-template-columns: 90px minmax(220px,1fr) auto; align-items: end; gap: 12px; }
 .category-add label { display: flex; flex-direction: column; gap: 6px; }
 .category-add small { letter-spacing: 0; text-transform: none; font-weight: 600; }

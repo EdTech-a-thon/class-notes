@@ -6,7 +6,7 @@ The app has three screens:
 
 - **Today** shows the class list and who already has a note today. Tapping a student opens a note locked to that student.
 - **All notes** filters by student, category, or search term and groups a student's notes by category for report-card writing.
-- **Categories** adds, renames, or removes the categories available in the note editor. Removing a category does not rewrite historical notes.
+- **Categories** adds, renames, or removes the categories available in the note editor. Removing a category does not rewrite historical notes. "Use for new classes" saves the current set as the device's default so every class created afterwards starts with it.
 
 Each note belongs to exactly one student and records a date and time, student, category, and text. The current date and time are selected automatically but can be changed before saving.
 
@@ -23,6 +23,7 @@ Everything lives in the browser's `localStorage` under `observations-local.*`:
 - `notebooks`: the list of classes (id and title).
 - `current`: the class that opens on launch.
 - `notebook:<id>`: one class, with its students, categories, and notes.
+- `default-categories`: the category set new classes start with, once a teacher has saved one.
 - `draft:<id>:<student>`: an unfinished note.
 
 Clearing site data for the app's origin removes every class and note, so this is a single-device notebook.

@@ -6,6 +6,7 @@ import { DEFAULT_CATEGORIES, type Note, type NoteDraft, type Notebook, type Note
 
 const INDEX_KEY = 'observations-local.notebooks'
 const CURRENT_KEY = 'observations-local.current'
+const DEFAULT_CATEGORIES_KEY = 'observations-local.default-categories'
 const notebookKey = (id: string) => `observations-local.notebook:${id}`
 
 function read(key: string): string {
@@ -73,6 +74,33 @@ export function setCurrentNotebook(id: string): void {
 const str = (value: unknown) => (typeof value === 'string' ? value : '')
 const num = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
 
+type CategoryChoice = Omit<Category, 'id'>
+
+/** The categories a new class starts with: the teacher's saved set, or the built-in one. */
+export function loadDefaultCategories(): CategoryChoice[] {
+  try {
+    const parsed: unknown = JSON.parse(read(DEFAULT_CATEGORIES_KEY) || 'null')
+    if (!Array.isArray(parsed)) return [...DEFAULT_CATEGORIES]
+    const saved = parsed
+      .map((entry: any) => ({ name: str(entry?.name).trim(), emoji: str(entry?.emoji).trim() }))
+      .filter((category) => category.name)
+    return saved.length ? saved : [...DEFAULT_CATEGORIES]
+  } catch {
+    return [...DEFAULT_CATEGORIES]
+  }
+}
+
+/** Remembers this set on the device so every class created afterwards starts with it. */
+export function saveDefaultCategories(categories: readonly CategoryChoice[]): void {
+  write(DEFAULT_CATEGORIES_KEY, JSON.stringify(categories.map(({ name, emoji }) => ({ name, emoji }))))
+}
+
+export function isDefaultCategories(categories: readonly CategoryChoice[]): boolean {
+  const defaults = loadDefaultCategories()
+  return categories.length === defaults.length
+    && categories.every((category, index) => category.name === defaults[index].name && category.emoji === defaults[index].emoji)
+}
+
 export function loadNotebook(id: string): Notebook | null {
   try {
     const parsed = JSON.parse(read(notebookKey(id)) || 'null')
@@ -118,11 +146,11 @@ function assignIds<T>(notebook: Notebook, items: Omit<T, 'id'>[]): { items: T[];
   return { items: withIds, nextId }
 }
 
-/** Starts a new class with the default categories, makes it current, and returns it. */
+/** Starts a new class with the teacher's default categories, makes it current, and returns it. */
 export function createNotebook(title: string, names: string[]): Notebook {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   const empty: Notebook = { id, title: title.trim() || 'My class', students: [], categories: [], notes: [], nextId: 1 }
-  const categories = assignIds<Category>(empty, [...DEFAULT_CATEGORIES])
+  const categories = assignIds<Category>(empty, loadDefaultCategories())
   const withCategories = { ...empty, categories: categories.items, nextId: categories.nextId }
   const students = assignIds<Student>(withCategories, names.map((name) => ({ name, initials: deriveInitials(name) })))
   const notebook = saveNotebook({ ...withCategories, students: students.items, nextId: students.nextId })

@@ -1,16 +1,20 @@
 <script lang="ts">
   import Check from '@lucide/svelte/icons/check'
   import Plus from '@lucide/svelte/icons/plus'
+  import Star from '@lucide/svelte/icons/star'
   import CategoryRow from './CategoryRow.svelte'
   import type { Category } from './lib/types'
 
   interface Props {
     categories: Category[]
+    /** Whether new classes already start with exactly this set. */
+    isDefault: boolean
     onadd: (category: Omit<Category, 'id'>) => boolean
     onupdate: (category: Category) => boolean
     ondelete: (category: Category) => boolean
+    onmakedefault: () => boolean
   }
-  let { categories, onadd, onupdate, ondelete }: Props = $props()
+  let { categories, isDefault, onadd, onupdate, ondelete, onmakedefault }: Props = $props()
   let name = $state('')
   let emoji = $state('')
   let justAdded = $state(false)
@@ -29,6 +33,11 @@
 
 <section class="page-heading categories-heading">
   <div class="heading-text"><p class="eyebrow">Your filing system</p><h1>Categories</h1><p class="subtext">These are the choices that appear when you write a note.</p></div>
+  {#if isDefault}
+    <p class="default-status"><Check size={18} /> New classes start with these categories</p>
+  {:else if categories.length}
+    <button class="button secondary default-button" type="button" onclick={onmakedefault}><Star size={18} /> Use for new classes</button>
+  {/if}
 </section>
 
 <form class="category-add" onsubmit={(event) => { event.preventDefault(); add() }}>
