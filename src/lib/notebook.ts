@@ -171,6 +171,32 @@ export function addStudents(notebook: Notebook, names: string[]): Notebook {
   return saveNotebook({ ...notebook, students: [...notebook.students, ...added.items], nextId: added.nextId })
 }
 
+type StudentSortDirection = 'asc' | 'desc'
+type StudentPlacement = 'before' | 'after'
+
+/** Reorders the roster by name without changing any student ids, notes, or drafts. */
+export function sortStudents(notebook: Notebook, direction: StudentSortDirection = 'asc'): Notebook {
+  const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+  const students = notebook.students
+    .map((student, index) => ({ student, index }))
+    .sort((left, right) => {
+      const compared = collator.compare(left.student.name, right.student.name)
+      return compared ? (direction === 'asc' ? compared : -compared) : left.index - right.index
+    })
+    .map(({ student }) => student)
+  return saveNotebook({ ...notebook, students })
+}
+
+/** Moves a student before or after another student while preserving all of their data. */
+export function reorderStudents(notebook: Notebook, studentId: number, targetId: number, placement: StudentPlacement): Notebook {
+  const student = notebook.students.find((entry) => entry.id === studentId)
+  if (!student || studentId === targetId || !notebook.students.some((entry) => entry.id === targetId)) return notebook
+  const students = notebook.students.filter((entry) => entry.id !== studentId)
+  const targetIndex = students.findIndex((entry) => entry.id === targetId)
+  students.splice(targetIndex + (placement === 'after' ? 1 : 0), 0, student)
+  return saveNotebook({ ...notebook, students })
+}
+
 /** Takes a student off the roster. Their notes stay in the class so nothing written is lost. */
 export function removeStudent(notebook: Notebook, id: number): Notebook {
   const student = notebook.students.find((entry) => entry.id === id)

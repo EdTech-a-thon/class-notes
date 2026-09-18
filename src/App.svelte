@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
+  import ArrowDownAZ from '@lucide/svelte/icons/arrow-down-a-z'
+  import ArrowDownZA from '@lucide/svelte/icons/arrow-down-z-a'
   import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right'
   import BookOpen from '@lucide/svelte/icons/book-open'
   import Check from '@lucide/svelte/icons/check'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
   import ClipboardPen from '@lucide/svelte/icons/clipboard-pen'
+  import ChevronUp from '@lucide/svelte/icons/chevron-up'
   import Plus from '@lucide/svelte/icons/plus'
   import Settings2 from '@lucide/svelte/icons/settings-2'
   import Trash from '@lucide/svelte/icons/trash'
@@ -13,8 +16,8 @@
   import { studentsWithDrafts } from './lib/drafts'
   import {
     addNotes, addStudents, addCategory, createNotebook, deleteNote, deleteNotebook, deleteCategory,
-    getCurrentNotebookId, isDefaultCategories, listNotebooks, loadNotebook, parseRosterNames, removeStudent, saveDefaultCategories,
-    setCurrentNotebook, updateNote, updateCategory,
+    getCurrentNotebookId, isDefaultCategories, listNotebooks, loadNotebook, parseRosterNames, removeStudent, reorderStudents, saveDefaultCategories,
+    setCurrentNotebook, sortStudents, updateNote, updateCategory,
   } from './lib/notebook'
   import { today } from './lib/time'
   import type { Note, NoteDraft, Notebook, NotebookSummary, Category, Student } from './lib/types'
@@ -23,6 +26,7 @@
   import CategoriesView from './CategoriesView.svelte'
 
   type View = 'today' | 'notes' | 'categories'
+  type SortDirection = 'asc' | 'desc'
 
   let notebook: Notebook | null = null
   let classes: NotebookSummary[] = []
@@ -39,6 +43,7 @@
   let rosterText = ''
   /** Student whose remove button was tapped once; a second tap removes them. */
   let confirmingRemoval: number | null = null
+  let nextRosterSortDirection: SortDirection = 'asc'
   let noteEditor: any
   let noteOpen = false
   let justSaved = ''
@@ -116,7 +121,7 @@
   }
 
   async function openRosterEditor() {
-    rosterText = ''; error = ''; confirmingRemoval = null; rosterModal.showModal()
+    rosterText = ''; error = ''; confirmingRemoval = null; nextRosterSortDirection = 'asc'; rosterModal.showModal()
     if (!notebook?.students.length) { await tick(); rosterTextarea?.focus() }
   }
   function saveRoster() {
@@ -130,6 +135,22 @@
     const book = notebook
     confirmingRemoval = null
     if (commit(() => removeStudent(book, student.id))) updateDraftStudent(student.name, false)
+  }
+  function sortRoster() {
+    if (!notebook) return
+    const book = notebook
+    const direction = nextRosterSortDirection
+    confirmingRemoval = null
+    if (commit(() => sortStudents(book, direction))) nextRosterSortDirection = direction === 'asc' ? 'desc' : 'asc'
+  }
+  function moveRosterStudent(student: Student, direction: 'up' | 'down') {
+    if (!notebook) return
+    const index = notebook.students.findIndex((entry) => entry.id === student.id)
+    const target = notebook.students[index + (direction === 'up' ? -1 : 1)]
+    if (!target) return
+    const book = notebook
+    confirmingRemoval = null
+    commit(() => reorderStudents(book, student.id, target.id, direction === 'up' ? 'before' : 'after'))
   }
 
   function flashSaved(name: string) {
@@ -253,14 +274,20 @@
 <dialog bind:this={rosterModal} class="roster-modal" onclick={(event) => event.target === event.currentTarget && rosterModal.close()}>
   <form method="dialog" onsubmit={(event) => { event.preventDefault(); saveRoster() }}>
     <button class="modal-close" type="button" onclick={() => rosterModal.close()}><X size={22} /></button>
-    <header class="modal-heading"><div><p class="eyebrow">Class list</p><h2>{notebook?.students.length ? 'Your students' : 'Add your students'}</h2></div></header>
+    <header class="modal-heading roster-heading"><div><p class="eyebrow">Class list</p><h2>{notebook?.students.length ? 'Your students' : 'Add your students'}</h2></div>{#if notebook?.students.length}<button class="sort-roster" type="button" onclick={sortRoster} aria-label={`Sort students ${nextRosterSortDirection === 'asc' ? 'A to Z' : 'Z to A'}`}>
+        {#if nextRosterSortDirection === 'asc'}<ArrowDownAZ size={17} aria-hidden="true" />{:else}<ArrowDownZA size={17} aria-hidden="true" />{/if}<span>Sort {nextRosterSortDirection === 'asc' ? 'A–Z' : 'Z–A'}</span>
+      </button>{/if}</header>
     {#if notebook?.students.length}
       <ul class="roster-list" aria-label="Current students">
         {#each notebook.students as student, index (student.id)}
           <li class="roster-row">
             <span class={'initials roster-initials color-' + ((index % 5) + 1)}>{student.initials}</span>
             <span class="roster-name">{student.name}</span>
-            <button class="icon-action delete-action" class:confirming={confirmingRemoval === student.id} type="button" onclick={() => dropStudent(student)} aria-label={(confirmingRemoval === student.id ? 'Confirm remove ' : 'Remove ') + student.name}><Trash size={18} /><span>{confirmingRemoval === student.id ? 'Confirm' : ''}</span></button>
+            <span class="roster-actions">
+              <button class="roster-move" type="button" onclick={() => moveRosterStudent(student, 'up')} disabled={index === 0} aria-label={`Move ${student.name} up`}><ChevronUp size={18} aria-hidden="true" /></button>
+              <button class="roster-move" type="button" onclick={() => moveRosterStudent(student, 'down')} disabled={index === notebook.students.length - 1} aria-label={`Move ${student.name} down`}><ChevronDown size={18} aria-hidden="true" /></button>
+              <button class="icon-action delete-action" class:confirming={confirmingRemoval === student.id} type="button" onclick={() => dropStudent(student)} aria-label={(confirmingRemoval === student.id ? 'Confirm remove ' : 'Remove ') + student.name}><Trash size={18} /><span>{confirmingRemoval === student.id ? 'Confirm' : ''}</span></button>
+            </span>
           </li>
         {/each}
       </ul>

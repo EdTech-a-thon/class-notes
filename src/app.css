@@ -182,6 +182,10 @@ h1, h2, p { margin-top: 0; }
 .modal-close { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 11px; color: var(--muted); background: #f0f2f6; position: absolute; top: 16px; right: 16px; display: grid; place-items: center; }
 .modal-heading { padding-right: 52px; }
 .modal-heading h2 { margin-bottom: 0; font-size: 1.45rem; letter-spacing: -.03em; }
+.roster-heading { min-height: 52px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.roster-heading > div { min-width: 0; }
+.sort-roster { min-height: 40px; padding: 0 11px; border: 1px solid var(--line); border-radius: 10px; color: var(--blue); background: #fffaf0; font-size: .82rem; font-weight: 780; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.sort-roster:hover { border-color: #d5ad4e; background: var(--blue-soft); }
 .composer-heading { margin: -2px 0 22px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .composer-student { min-width: 0; display: flex; align-items: center; gap: 13px; }
 .composer-student h2 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.45rem; letter-spacing: -.03em; }
@@ -225,6 +229,9 @@ h1, h2, p { margin-top: 0; }
 .roster-row { padding: 6px 6px 6px 8px; border: 1px solid var(--line); border-radius: 13px; background: #fff; display: grid; grid-template-columns: 40px minmax(0,1fr) auto; align-items: center; gap: 10px; }
 .roster-initials { width: 40px; height: 40px; border-radius: 12px; font-size: .74rem; }
 .roster-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 720; }
+.roster-actions { display: inline-flex; align-items: center; gap: 4px; }
+.roster-move { width: 38px; min-height: 48px; padding: 0; border: 0; border-radius: 10px; color: var(--muted); background: #f3f5f8; display: inline-grid; place-items: center; }
+.roster-move:hover:not(:disabled) { color: var(--blue); background: var(--blue-soft); }
 .roster-modal .roster-help { margin: 0 0 18px; }
 .roster-modal .roster-list ~ .roster-textarea, .roster-modal .roster-help ~ .roster-textarea { min-height: 120px; }
 .date-field { margin-top: 14px; max-width: 330px; display: flex; flex-direction: column; gap: 7px; }
