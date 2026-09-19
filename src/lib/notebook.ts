@@ -1,7 +1,7 @@
 // Everything the app knows lives in this browser's localStorage. There is no server and no
 // account: one entry per class, an index of classes, and which class is open.
 
-import { removeDraft, removeDraftsFor } from './drafts'
+import { readDraft, removeDraft, removeDraftsFor, writeDraft } from './drafts'
 import { DEFAULT_CATEGORIES, type Note, type NoteDraft, type Notebook, type NotebookSummary, type Student, type Category } from './types'
 
 const INDEX_KEY = 'observations-local.notebooks'
@@ -225,8 +225,19 @@ export function addCategory(notebook: Notebook, category: Omit<Category, 'id'>):
   return saveNotebook({ ...notebook, categories: [...notebook.categories, ...added.items], nextId: added.nextId })
 }
 
+/** Renames or re-emojis a category. Notes and drafts point at categories by name, so a rename follows them too. */
 export function updateCategory(notebook: Notebook, category: Category): Notebook {
-  return saveNotebook({ ...notebook, categories: notebook.categories.map((entry) => (entry.id === category.id ? category : entry)) })
+  const previous = notebook.categories.find((entry) => entry.id === category.id)
+  if (!previous) return notebook
+  const categories = notebook.categories.map((entry) => (entry.id === category.id ? category : entry))
+  if (previous.name === category.name) return saveNotebook({ ...notebook, categories })
+  const notes = notebook.notes.map((note) => (note.category === previous.name ? { ...note, category: category.name } : note))
+  const saved = saveNotebook({ ...notebook, categories, notes })
+  for (const student of notebook.students) {
+    const draft = readDraft(notebook.id, student.name)
+    if (draft?.category === previous.name) writeDraft(notebook.id, student.name, { ...draft, category: category.name })
+  }
+  return saved
 }
 
 export function deleteCategory(notebook: Notebook, id: number): Notebook {
